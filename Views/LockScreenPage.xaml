@@ -1,0 +1,170 @@
+<Page
+    x:Class="quantum_drive.Views.LockScreenPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <Page.Resources>
+        <Storyboard x:Name="LogoBreathAnimation" RepeatBehavior="Forever">
+            <!-- Gentle scale pulse -->
+            <DoubleAnimation Storyboard.TargetName="LogoScale" Storyboard.TargetProperty="ScaleX"
+                             From="1.0" To="1.04" Duration="0:0:3" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="LogoScale" Storyboard.TargetProperty="ScaleY"
+                             From="1.0" To="1.04" Duration="0:0:3" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <!-- Slow float up/down -->
+            <DoubleAnimation Storyboard.TargetName="LogoTranslate" Storyboard.TargetProperty="Y"
+                             From="0" To="-4" Duration="0:0:4" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </Page.Resources>
+
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+        <!-- Normal Login Panel -->
+        <StackPanel Spacing="24" Width="320" HorizontalAlignment="Center"
+                    Visibility="{x:Bind ViewModel.IsRecoveryMode, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}">
+
+            <!-- App Logo -->
+            <Image Source="ms-appx:///Assets/Square150x150Logo.scale-200.png"
+                   Width="80" Height="80" HorizontalAlignment="Center" Margin="0,0,0,4"
+                   RenderTransformOrigin="0.5,0.5">
+                <Image.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="LogoScale"/>
+                        <TranslateTransform x:Name="LogoTranslate"/>
+                    </TransformGroup>
+                </Image.RenderTransform>
+            </Image>
+
+            <!-- App Title -->
+            <TextBlock Text="QuantumDrive"
+                       FontSize="28"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Foreground="{StaticResource QuantumVioletBrush}"/>
+
+            <TextBlock Text="Enter your master password to unlock"
+                       FontSize="14"
+                       Opacity="0.5"
+                       HorizontalAlignment="Center"/>
+
+            <!-- Password Input with Shake Animation -->
+            <PasswordBox x:Name="PasswordInput"
+                         PlaceholderText="Master Password"
+                         Width="320"
+                         KeyDown="PasswordInput_KeyDown"
+                         IsEnabled="{x:Bind ViewModel.IsUnlocking, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}">
+                <PasswordBox.RenderTransform>
+                    <TranslateTransform x:Name="ShakeTransform"/>
+                </PasswordBox.RenderTransform>
+            </PasswordBox>
+
+            <!-- Error Message -->
+            <TextBlock Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                       Foreground="Red"
+                       FontSize="12"
+                       HorizontalAlignment="Center"
+                       Visibility="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+            <!-- Unlock Button -->
+            <Button Content="Unlock"
+                    HorizontalAlignment="Stretch"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Command="{x:Bind ViewModel.UnlockCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsUnlocking, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"/>
+
+            <!-- Loading Indicator -->
+            <ProgressRing IsActive="{x:Bind ViewModel.IsUnlocking, Mode=OneWay}"
+                          Width="32" Height="32"
+                          HorizontalAlignment="Center"/>
+
+            <!-- Forgot Password Link -->
+            <HyperlinkButton Content="Forgot Password?"
+                             HorizontalAlignment="Center"
+                             Command="{x:Bind ViewModel.EnterRecoveryModeCommand}"/>
+
+        </StackPanel>
+
+        <!-- Recovery Mode Panel -->
+        <StackPanel Spacing="20" Width="360" HorizontalAlignment="Center"
+                    Visibility="{x:Bind ViewModel.IsRecoveryMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+
+            <!-- App Title -->
+            <TextBlock Text="QuantumDrive"
+                       FontSize="28"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Foreground="{StaticResource QuantumVioletBrush}"/>
+
+            <TextBlock Text="Account Recovery"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"/>
+
+            <TextBlock Text="Enter your recovery key and set a new password"
+                       FontSize="14"
+                       Opacity="0.5"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"/>
+
+            <!-- Recovery Key Input -->
+            <TextBox x:Name="RecoveryKeyInput"
+                     PlaceholderText="ABCD-EFGH-IJKL-MNOP-..."
+                     Header="Recovery Key"
+                     TextChanged="RecoveryKeyInput_TextChanged"
+                     FontFamily="Consolas"
+                     IsEnabled="{x:Bind ViewModel.IsRecovering, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}">
+                <TextBox.RenderTransform>
+                    <TranslateTransform x:Name="RecoveryShakeTransform"/>
+                </TextBox.RenderTransform>
+            </TextBox>
+
+            <!-- New Password -->
+            <PasswordBox x:Name="RecoveryNewPasswordInput"
+                         PlaceholderText="New Password"
+                         Header="New Password"
+                         PasswordChanged="RecoveryNewPasswordInput_PasswordChanged"
+                         IsEnabled="{x:Bind ViewModel.IsRecovering, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"/>
+
+            <!-- Confirm New Password -->
+            <PasswordBox x:Name="RecoveryConfirmPasswordInput"
+                         PlaceholderText="Confirm New Password"
+                         Header="Confirm Password"
+                         PasswordChanged="RecoveryConfirmPasswordInput_PasswordChanged"
+                         IsEnabled="{x:Bind ViewModel.IsRecovering, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"/>
+
+            <!-- Error Message -->
+            <TextBlock Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                       Foreground="Red"
+                       FontSize="12"
+                       HorizontalAlignment="Center"
+                       Visibility="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+            <!-- Reset Password Button -->
+            <Button Content="Reset Password"
+                    HorizontalAlignment="Stretch"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Command="{x:Bind ViewModel.RecoverCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsRecovering, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"/>
+
+            <!-- Loading Indicator -->
+            <ProgressRing IsActive="{x:Bind ViewModel.IsRecovering, Mode=OneWay}"
+                          Width="32" Height="32"
+                          HorizontalAlignment="Center"/>
+
+            <!-- Back to Login Link -->
+            <HyperlinkButton Content="Back to Login"
+                             HorizontalAlignment="Center"
+                             Command="{x:Bind ViewModel.ExitRecoveryModeCommand}"/>
+
+        </StackPanel>
+    </Grid>
+</Page>

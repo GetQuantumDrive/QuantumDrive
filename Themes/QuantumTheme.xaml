@@ -1,0 +1,13 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Color x:Key="QuantumViolet">#7F00FF</Color>
+    <Color x:Key="QuantumIndigo">#4B0082</Color>
+    <Color x:Key="ShieldSilver">#E5E5E5</Color>
+
+    <SolidColorBrush x:Key="QuantumVioletBrush" Color="{StaticResource QuantumViolet}"/>
+    <SolidColorBrush x:Key="QuantumIndigoBrush" Color="{StaticResource QuantumIndigo}"/>
+    <SolidColorBrush x:Key="ShieldSilverBrush" Color="{StaticResource ShieldSilver}"/>
+
+</ResourceDictionary>

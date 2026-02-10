@@ -1,0 +1,233 @@
+<Page
+    x:Class="quantum_drive.Views.SetupWizardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <Page.Resources>
+        <!-- Key icon pulse animation -->
+        <Storyboard x:Name="KeyPulseAnimation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="KeyIconScale"
+                             Storyboard.TargetProperty="ScaleX"
+                             From="1.0" To="1.1" Duration="0:0:1" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="KeyIconScale"
+                             Storyboard.TargetProperty="ScaleY"
+                             From="1.0" To="1.1" Duration="0:0:1" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+        <Storyboard x:Name="KeyFadeInAnimation">
+            <DoubleAnimation Storyboard.TargetName="KeyIcon"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0" To="1" Duration="0:0:1">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <Grid Padding="48" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560">
+            <StackPanel Spacing="32">
+
+                <!-- Step Indicator -->
+                <PipsPager NumberOfPages="3"
+                           SelectedPageIndex="{x:Bind ViewModel.CurrentStep, Mode=OneWay}"
+                           HorizontalAlignment="Center"
+                           IsEnabled="False"/>
+
+                <!-- ════════════ STEP 0: Welcome ════════════ -->
+                <StackPanel Spacing="20"
+                            Visibility="{x:Bind ViewModel.CurrentStep, Mode=OneWay, Converter={StaticResource StepToVisibilityConverter}, ConverterParameter=0}">
+
+                    <!-- Animated Key Icon -->
+                    <FontIcon x:Name="KeyIcon" Glyph="&#xE192;"
+                              FontSize="64" Opacity="0"
+                              Foreground="{StaticResource QuantumVioletBrush}"
+                              HorizontalAlignment="Center"
+                              RenderTransformOrigin="0.5,0.5">
+                        <FontIcon.RenderTransform>
+                            <ScaleTransform x:Name="KeyIconScale"/>
+                        </FontIcon.RenderTransform>
+                    </FontIcon>
+
+                    <TextBlock Text="Welcome to QuantumDrive"
+                               FontSize="32" FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Foreground="{StaticResource QuantumVioletBrush}"/>
+
+                    <TextBlock Text="Military-Grade Encryption for Your Cloud Files"
+                               FontSize="16" Opacity="0.8"
+                               HorizontalAlignment="Center"/>
+
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="24">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="QuantumDrive uses Zero-Knowledge Architecture:"
+                                       FontWeight="SemiBold" TextWrapping="Wrap"/>
+
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="&#x2022; Your password never leaves this device" TextWrapping="Wrap"/>
+                                <TextBlock Text="&#x2022; We cannot recover your password if lost" TextWrapping="Wrap"/>
+                                <TextBlock Text="&#x2022; Even we cannot decrypt your files" TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <TextBlock Text="Post-Quantum Encryption: ML-KEM-768 + AES-256-GCM"
+                                       FontWeight="SemiBold" Opacity="0.8" Margin="0,8,0,0"/>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="&#x2713; End-to-end encryption" Foreground="{StaticResource QuantumVioletBrush}"/>
+                                <TextBlock Text="&#x2713; Post-quantum secure" Foreground="{StaticResource QuantumVioletBrush}"/>
+                                <TextBlock Text="&#x2713; Multi-cloud support (Pro tier)" Foreground="{StaticResource QuantumVioletBrush}"/>
+                                <TextBlock Text="&#x2713; Open-source security" Foreground="{StaticResource QuantumVioletBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Button Content="Get Started"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.NextStepCommand}"/>
+                </StackPanel>
+
+                <!-- ════════════ STEP 1: Password Creation ════════════ -->
+                <StackPanel Spacing="16"
+                            Visibility="{x:Bind ViewModel.CurrentStep, Mode=OneWay, Converter={StaticResource StepToVisibilityConverter}, ConverterParameter=1}">
+
+                    <TextBlock Text="Create Your Master Password"
+                               FontSize="24" FontWeight="Bold"
+                               Foreground="{StaticResource QuantumVioletBrush}"/>
+
+                    <TextBlock Text="This password protects your vault. It cannot be recovered if lost."
+                               TextWrapping="Wrap" Opacity="0.7"/>
+
+                    <PasswordBox x:Name="PasswordBox"
+                                 Header="Create Master Password"
+                                 PlaceholderText="Enter a strong password"
+                                 PasswordChanged="PasswordBox_PasswordChanged"/>
+
+                    <PasswordBox x:Name="ConfirmPasswordBox"
+                                 Header="Confirm Password"
+                                 PlaceholderText="Re-enter your password"
+                                 PasswordChanged="ConfirmPasswordBox_PasswordChanged"/>
+
+                    <!-- Entropy Meter -->
+                    <StackPanel Spacing="8">
+                        <ProgressBar x:Name="EntropyBar"
+                                     Value="{x:Bind ViewModel.EntropyBits, Mode=OneWay}"
+                                     Maximum="100" Minimum="0" Height="8"/>
+
+                        <TextBlock FontSize="13">
+                            <Run FontWeight="SemiBold" Text="{x:Bind ViewModel.EntropyBits, Mode=OneWay, Converter={StaticResource DoubleToIntStringConverter}}"/>
+                            <Run Text=" bits - "/>
+                            <Run Text="{x:Bind ViewModel.StrengthLabel, Mode=OneWay}"/>
+                        </TextBlock>
+
+                        <TextBlock FontSize="12" Opacity="0.6">
+                            <Run Text="Time to crack: "/>
+                            <Run Text="{x:Bind ViewModel.TimeToCrack, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Password match indicator -->
+                    <StackPanel Orientation="Horizontal" Spacing="6"
+                                Visibility="{x:Bind ViewModel.ConfirmPassword, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}">
+                        <FontIcon Glyph="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchGlyphConverter}}"
+                                  FontSize="14"
+                                  Foreground="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchColorConverter}}"/>
+                        <TextBlock Text="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchTextConverter}}"
+                                   FontSize="12"
+                                   Foreground="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchColorConverter}}"/>
+                    </StackPanel>
+
+                    <!-- Password Hint -->
+                    <TextBox Header="Password Hint (Optional)"
+                             PlaceholderText="e.g., Name of first pet + birth year"
+                             Text="{x:Bind ViewModel.PasswordHint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             MaxLength="100"/>
+
+                    <Button Content="Create Vault &amp; Continue"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.CreateVaultCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsPasswordValid, Mode=OneWay}"/>
+
+                    <Button Content="Back"
+                            HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.PreviousStepCommand}"/>
+
+                    <!-- Loading -->
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsCreatingVault, Mode=OneWay}"
+                                  Width="32" Height="32"
+                                  HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- ════════════ STEP 2: Recovery Kit ════════════ -->
+                <StackPanel Spacing="16"
+                            Visibility="{x:Bind ViewModel.CurrentStep, Mode=OneWay, Converter={StaticResource StepToVisibilityConverter}, ConverterParameter=2}">
+
+                    <TextBlock Text="Save Your Recovery Information"
+                               FontSize="24" FontWeight="Bold"
+                               Foreground="{StaticResource QuantumVioletBrush}"/>
+
+                    <!-- Warning Banner -->
+                    <InfoBar Severity="Warning" IsOpen="True" IsClosable="False"
+                             Title="CRITICAL: Store This Securely"
+                             Message="This recovery kit helps you restore access if you forget details. Without your password, your vault cannot be recovered (true zero-knowledge security)."/>
+
+                    <!-- Recovery Kit Display -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="20">
+                        <TextBlock Text="{x:Bind ViewModel.RecoveryKitText, Mode=OneWay}"
+                                   FontFamily="Consolas"
+                                   FontSize="12"
+                                   IsTextSelectionEnabled="True"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+
+                    <!-- Export Options -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Command="{x:Bind ViewModel.CopyRecoveryKitCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8C8;" FontSize="16"/>
+                                <TextBlock Text="Copy to Clipboard"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Click="OnSaveRecoveryKitClick">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE74E;" FontSize="16"/>
+                                <TextBlock Text="Save as Text File"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Notification bar for copy/save feedback -->
+                    <InfoBar x:Name="RecoveryNotification"
+                             Severity="Success" IsOpen="False" IsClosable="True"/>
+
+                    <!-- Checkpoint -->
+                    <CheckBox Content="I have saved this recovery kit to a secure location"
+                              IsChecked="{x:Bind ViewModel.HasAcknowledgedRisk, Mode=TwoWay}"/>
+
+                    <Button Content="Finish Setup"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.FinishSetupCommand}"
+                            IsEnabled="{x:Bind ViewModel.CanFinish, Mode=OneWay}"/>
+                </StackPanel>
+
+                <!-- Error Message -->
+                <TextBlock Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                           Foreground="Red" FontSize="12" HorizontalAlignment="Center"
+                           Visibility="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>
