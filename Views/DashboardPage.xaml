@@ -1,0 +1,162 @@
+<Page
+    x:Class="quantum_drive.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:quantum_drive.Models"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <ScrollViewer>
+        <StackPanel Padding="40,36" Spacing="28" MaxWidth="720">
+
+            <!-- Header -->
+            <Grid>
+                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                    <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
+                           Width="36" Height="36"/>
+                    <TextBlock Text="QuantumDrive"
+                               FontSize="24" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Command="{x:Bind ViewModel.NavigateToSettingsCommand}">
+                    <FontIcon Glyph="&#xE115;" FontSize="18"/>
+                </Button>
+            </Grid>
+
+            <!-- Notification Bar -->
+            <InfoBar Title="{x:Bind ViewModel.NotificationMessage, Mode=OneWay}"
+                     Severity="{x:Bind ViewModel.NotificationSeverity, Mode=OneWay}"
+                     IsOpen="{x:Bind ViewModel.IsNotificationOpen, Mode=TwoWay}"
+                     IsClosable="True"/>
+
+            <!-- Virtual Drive -->
+            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                    CornerRadius="12" Padding="28">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="6">
+                        <TextBlock Text="{x:Bind ViewModel.DriveLabel, Mode=OneWay}"
+                                   FontSize="20" FontWeight="SemiBold"/>
+                        <Grid Height="20">
+                            <TextBlock Text="Post-quantum encrypted virtual drive"
+                                       FontSize="13" Opacity="0.5"
+                                       VerticalAlignment="Center"
+                                       Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8"
+                                        Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ProgressRing IsActive="True" Width="16" Height="16"/>
+                                <TextBlock Text="Configuring drive..." FontSize="13" Opacity="0.5" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <HyperlinkButton Padding="0" Height="Auto"
+                                         Command="{x:Bind ViewModel.OpenVirtualDriveCommand}"
+                                         Visibility="{x:Bind ViewModel.IsDriveMounted, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xED25;" FontSize="12"/>
+                                <TextBlock Text="Open in Explorer" FontSize="13"/>
+                            </StackPanel>
+                        </HyperlinkButton>
+                    </StackPanel>
+
+                    <ToggleSwitch Grid.Column="1"
+                                  IsOn="{x:Bind ViewModel.IsDriveMounted, Mode=TwoWay}"
+                                  IsEnabled="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"
+                                  VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- Stats -->
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="10" Padding="20">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Vault" FontSize="13" Opacity="0.5"/>
+                        <TextBlock Text="{x:Bind ViewModel.VaultSizeLabel, Mode=OneWay}"
+                                   FontSize="28" FontWeight="SemiBold"/>
+                        <ProgressBar Value="{x:Bind ViewModel.FileUsagePercent, Mode=OneWay}"
+                                     Maximum="100" Height="4" CornerRadius="2"
+                                     Visibility="{x:Bind ViewModel.IsFreeTier, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <TextBlock Text="{x:Bind ViewModel.VaultFileCountLabel, Mode=OneWay}"
+                                   FontSize="13" Opacity="0.5"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="10" Padding="20">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Disk Space" FontSize="13" Opacity="0.5"/>
+                        <TextBlock Text="{x:Bind ViewModel.DiskFreeLabel, Mode=OneWay}"
+                                   FontSize="28" FontWeight="SemiBold"/>
+                        <TextBlock Text="{x:Bind ViewModel.DiskFreeDetail, Mode=OneWay}"
+                                   FontSize="13" Opacity="0.5"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Cloud Providers -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="Cloud Providers" FontSize="18" FontWeight="SemiBold"/>
+
+                <ListView ItemsSource="{x:Bind ViewModel.Providers}"
+                          SelectionMode="None"
+                          IsItemClickEnabled="True"
+                          ItemClick="ProviderList_ItemClick">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:CloudProviderItem">
+                            <Grid Padding="8,12" Opacity="{x:Bind IsLocked, Converter={StaticResource BoolToOpacityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <FontIcon Grid.Column="0" Glyph="{x:Bind Icon}" FontSize="20"
+                                          Foreground="{StaticResource QuantumVioletBrush}"
+                                          Margin="0,0,12,0"/>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Name}"/>
+                                    <TextBlock Text="{x:Bind Description}" Opacity="0.5" FontSize="12"/>
+                                </StackPanel>
+
+                                <TextBlock Grid.Column="2"
+                                           Text="{x:Bind Tier}" FontSize="11"
+                                           Opacity="0.4" VerticalAlignment="Center"
+                                           Margin="8,0"/>
+
+                                <Button Grid.Column="3"
+                                        Click="OpenProviderStorage_Click"
+                                        ToolTipService.ToolTip="Open in Explorer"
+                                        Background="Transparent" Padding="6"
+                                        VerticalAlignment="Center"
+                                        Visibility="{x:Bind IsLocked, Converter={StaticResource InvertBoolToVisibilityConverter}}">
+                                    <FontIcon Glyph="&#xED25;" FontSize="14"/>
+                                </Button>
+
+                                <FontIcon Grid.Column="3" Glyph="&#xE72E;"
+                                          FontSize="14" Opacity="0.4"
+                                          Visibility="{x:Bind IsLocked, Converter={StaticResource BoolToVisibilityConverter}}"
+                                          VerticalAlignment="Center"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

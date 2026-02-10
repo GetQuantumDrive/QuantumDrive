@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="quantum_drive.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:helpers="using:quantum_drive.Helpers">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <ResourceDictionary Source="Themes/QuantumTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Converters -->
+            <helpers:BoolToOpacityConverter x:Key="BoolToOpacityConverter"/>
+            <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+            <helpers:InvertBoolConverter x:Key="InvertBoolConverter"/>
+            <helpers:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+            <helpers:StepToVisibilityConverter x:Key="StepToVisibilityConverter"/>
+            <helpers:DoubleToIntStringConverter x:Key="DoubleToIntStringConverter"/>
+            <helpers:PasswordMismatchVisibilityConverter x:Key="PasswordMismatchVisibilityConverter"/>
+            <helpers:BoolToMatchGlyphConverter x:Key="BoolToMatchGlyphConverter"/>
+            <helpers:BoolToMatchColorConverter x:Key="BoolToMatchColorConverter"/>
+            <helpers:BoolToMatchTextConverter x:Key="BoolToMatchTextConverter"/>
+            <helpers:InvertBoolToVisibilityConverter x:Key="InvertBoolToVisibilityConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

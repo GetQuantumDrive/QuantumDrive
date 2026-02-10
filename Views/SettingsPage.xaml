@@ -1,0 +1,187 @@
+<Page
+    x:Class="quantum_drive.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <ScrollViewer>
+        <StackPanel Padding="40,36" Spacing="24" MaxWidth="640">
+
+            <!-- Header -->
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Command="{x:Bind ViewModel.NavigateBackCommand}">
+                    <FontIcon Glyph="&#xE72B;" FontSize="16"/>
+                </Button>
+                <TextBlock Text="Settings" FontSize="24" FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Notification Bar -->
+            <InfoBar Title="{x:Bind ViewModel.NotificationMessage, Mode=OneWay}"
+                     Severity="{x:Bind ViewModel.NotificationSeverity, Mode=OneWay}"
+                     IsOpen="{x:Bind ViewModel.IsNotificationOpen, Mode=TwoWay}"
+                     IsClosable="True"/>
+
+            <!-- ═══════ Section 1: General ═══════ -->
+            <TextBlock Text="General" FontSize="18" FontWeight="SemiBold"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="10" Padding="24">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="Auto-mount drive on unlock" FontWeight="SemiBold"/>
+                        <TextBlock Text="Automatically mount the virtual drive after logging in"
+                                   FontSize="13" Opacity="0.5" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <ToggleSwitch Grid.Column="1" VerticalAlignment="Center"
+                                  IsOn="{x:Bind ViewModel.IsAutoMountEnabled, Mode=TwoWay}"/>
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Section 2: Account ═══════ -->
+            <TextBlock Text="Account Settings" FontSize="18" FontWeight="SemiBold"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="10" Padding="24">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Change Master Password" FontWeight="SemiBold"/>
+
+                    <PasswordBox x:Name="OldPasswordBox"
+                                 Header="Current Password"
+                                 PlaceholderText="Enter current password"
+                                 PasswordChanged="OldPasswordBox_PasswordChanged"/>
+
+                    <PasswordBox x:Name="NewPasswordBox"
+                                 Header="New Password"
+                                 PlaceholderText="Enter new password"
+                                 PasswordChanged="NewPasswordBox_PasswordChanged"/>
+
+                    <!-- Entropy feedback -->
+                    <StackPanel Spacing="4">
+                        <ProgressBar x:Name="NewPasswordEntropyBar"
+                                     Value="{x:Bind ViewModel.NewPasswordEntropyBits, Mode=OneWay}"
+                                     Maximum="100" Minimum="0" Height="6"/>
+                        <TextBlock FontSize="12" Opacity="0.8"
+                                   Text="{x:Bind ViewModel.NewPasswordStrengthLabel, Mode=OneWay}"/>
+                    </StackPanel>
+
+                    <PasswordBox x:Name="ConfirmNewPasswordBox"
+                                 Header="Confirm New Password"
+                                 PlaceholderText="Re-enter new password"
+                                 PasswordChanged="ConfirmNewPasswordBox_PasswordChanged"/>
+
+                    <InfoBar Severity="Informational" IsOpen="True" IsClosable="False"
+                             Message="Changing your password re-encrypts your vault key but does NOT re-encrypt your files. This operation is instant."/>
+
+                    <Button Content="Change Password"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.ChangePasswordCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsChangePasswordValid, Mode=OneWay}"/>
+
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsChangingPassword, Mode=OneWay}"
+                                  Width="24" Height="24" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════ Section 2: License ═══════ -->
+            <TextBlock Text="License &amp; Subscription" FontSize="18" FontWeight="SemiBold"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="10" Padding="24">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="{x:Bind ViewModel.CurrentTier, Mode=OneWay}"
+                               FontSize="16" FontWeight="SemiBold"/>
+
+                    <TextBox Header="Enter License Key"
+                             PlaceholderText="QDRIVE-PRO-XXXX-XXXX"
+                             Text="{x:Bind ViewModel.LicenseKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <Button Content="Activate License"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.ActivateLicenseCommand}"/>
+
+                    <TextBlock TextWrapping="Wrap" Opacity="0.7" FontSize="12"
+                               Text="Pro features: Multi-cloud (OneDrive, Dropbox), Post-Quantum encryption (ML-KEM-768), Priority support"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════ Section 3: Session ═══════ -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="10" Padding="24">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="Log Out" FontWeight="SemiBold"/>
+                        <TextBlock Text="Lock the vault and return to the login screen"
+                                   FontSize="13" Opacity="0.5" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <Button Grid.Column="1" VerticalAlignment="Center"
+                            Command="{x:Bind ViewModel.LogOutCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xF3B1;" FontSize="16"/>
+                            <TextBlock Text="Log Out"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Section 4: Danger Zone ═══════ -->
+            <TextBlock Text="Danger Zone" FontSize="18" FontWeight="SemiBold" Foreground="Red"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="Red" BorderThickness="1" CornerRadius="10" Padding="24">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Export Recovery Kit" FontWeight="SemiBold"/>
+                    <TextBlock Text="Export your vault recovery information. You will need to confirm your password."
+                               TextWrapping="Wrap" Opacity="0.7" FontSize="13"/>
+
+                    <!-- Password confirmation for export -->
+                    <PasswordBox x:Name="ExportPasswordBox"
+                                 Header="Confirm Password"
+                                 PlaceholderText="Enter master password"
+                                 PasswordChanged="ExportPasswordBox_PasswordChanged"
+                                 Visibility="{x:Bind ViewModel.ExportPasswordVerified, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
+
+                    <Button Click="OnExportRecoveryKitClick"
+                            Visibility="{x:Bind ViewModel.ExportPasswordVerified, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE896;" FontSize="16"/>
+                            <TextBlock Text="Verify &amp; Export"/>
+                        </StackPanel>
+                    </Button>
+
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsVerifyingExportPassword, Mode=OneWay}"
+                                  Width="24" Height="24" HorizontalAlignment="Left"/>
+
+                    <!-- Save button shown after password verification -->
+                    <StackPanel Visibility="{x:Bind ViewModel.ExportPasswordVerified, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                Spacing="8">
+                        <InfoBar Severity="Success" IsOpen="True" IsClosable="False"
+                                 Message="Password verified. Click below to save the recovery kit."/>
+                        <Button Click="OnSaveExportedRecoveryKit" Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE74E;" FontSize="16"/>
+                                <TextBlock Text="Save Recovery Kit"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>
