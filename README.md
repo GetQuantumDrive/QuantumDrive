@@ -4,10 +4,10 @@ Zero-knowledge encrypted virtual drive for Windows. Files are encrypted transpar
 
 ## How It Works
 
-QuantumDrive mounts a virtual drive (e.g., `Q:\`) via a local WebDAV server. When you save a file to this drive, it's encrypted in real-time and stored as a `.qd` file in your vault directory. When you open a file, it's decrypted on the fly. The plaintext never touches disk.
+QuantumDrive mounts a virtual drive (e.g., `Q:\`) using the Windows Cloud Files API (the same technology behind OneDrive). When you save a file to this drive, it's encrypted in real-time and stored as a `.qd` file in your vault directory. When you open a file, it's decrypted on the fly. The plaintext never touches disk.
 
 ```
-Your App  -->  Q:\ (Virtual Drive)  -->  WebDAV Server (localhost)  -->  Encrypt  -->  .qd files on disk
+Your App  -->  Q:\ (Virtual Drive)  -->  Cloud Files API  -->  Encrypt  -->  .qd files on disk
 ```
 
 ## Encryption Architecture
@@ -31,60 +31,53 @@ The vault identity file (`vault.identity`) stores:
 Each file is encrypted with a unique key using hybrid post-quantum cryptography:
 
 1. **ML-KEM-1024 Encapsulation**: generates a random shared secret (256 bits) and a 1568-byte capsule. Only the ML-KEM private key holder can recover the shared secret from the capsule.
-2. **AES-256-GCM Encryption**: the shared secret is used as the File Encryption Key (FEK). A random 12-byte nonce is generated per file. The file data is encrypted with AES-256-GCM using this FEK and nonce.
+2. **HKDF-SHA256**: derives the File Encryption Key (FEK) from the shared secret.
+3. **AES-256-GCM Encryption**: chunked AEAD with 64 KB chunks and counter nonces. The capsule is bound as AAD on all operations.
 
-### QDRIVE11 File Format
+### QDRIVE01 File Format
 
 ```
 +--------------------------------------------------+
-| Magic: "QDRIVE11"              (8 bytes)         |
-| Metadata Length                 (4 bytes, LE)     |
-| Metadata JSON (name, size, hash, timestamp)       |
+| Magic: "QDRIVE01"              (8 bytes)         |
+| ML-KEM Capsule                 (1568 bytes)      |
 +--------------------------------------------------+
-| Nonce                           (12 bytes)        |
-| ML-KEM-1024 Capsule            (1568 bytes)       |
-| AES-GCM Auth Tag               (16 bytes)         |
-| Ciphertext                     (variable)         |
+| Metadata Nonce                 (12 bytes)        |
+| Metadata Length                (4 bytes, LE)     |
+| Metadata Tag                   (16 bytes)        |
+| Metadata Ciphertext            (variable)        |
++--------------------------------------------------+
+| Data Nonce Prefix              (8 bytes)         |
+| Chunk 0: Tag (16) + Ciphertext (≤64 KB)         |
+| Chunk 1: Tag (16) + Ciphertext (≤64 KB)         |
+| ...                                              |
 +--------------------------------------------------+
 ```
 
 Every file gets a unique nonce and a unique ML-KEM encapsulation, meaning every file has its own encryption key. Compromising one file's key reveals nothing about other files.
 
-### Layer 3: Virtual Drive (WebDAV over Loopback)
+### Layer 3: Virtual Drive (Cloud Files API)
 
-A Kestrel-based WebDAV server runs on `localhost:{random_port}`. Windows maps a drive letter to this server. The WebDAV handler intercepts all file operations:
+QuantumDrive registers as a Windows cloud sync provider using the Cloud Files API (CldApi). Files appear as native NTFS placeholders in Explorer — they look and behave exactly like local files but are transparently decrypted on demand.
 
-- **PUT** (write): encrypts the file with ML-KEM + AES-256-GCM, writes `.qd` to vault
-- **GET** (read): reads `.qd` from vault, decapsulates ML-KEM, decrypts with AES-256-GCM
-- **DELETE/MOVE**: operates on the encrypted `.qd` files
+- **Read**: when an app opens a placeholder file, the CFAPI callback decrypts the corresponding `.qd` file from the vault and streams the plaintext data
+- **Write**: when a file is saved, a FileSystemWatcher detects the change and re-encrypts it back to the vault as a new `.qd` file
+- **Delete/Move**: operations are mirrored to the encrypted vault folder
 
-The drive appears as "QuantumDrive" in Explorer's navigation pane with a custom icon.
+The drive appears as "QuantumDrive" in Explorer's navigation pane with a custom icon. Because files are native NTFS, applications (including Microsoft Office) open them without Protected View restrictions.
 
 ### Recovery Key
 
 A 256-bit recovery key is generated during vault creation, encoded as Base32 groups. A separate copy of the ML-KEM private key is encrypted using a key derived from the recovery key (same Argon2id parameters). This allows vault recovery without the master password.
 
-## Licensing
-
-License keys are Ed25519-signed. The app contains only the public key and can verify but not generate keys. The generator tool (`tools/generate-license.ps1`) holds the private key.
-
-Key format: `QDPRO-XXXXX-XXXXX-...` (Base32-encoded 4-byte serial + 64-byte Ed25519 signature)
-
 ## Tech Stack
 
 - **UI**: WinUI 3 with Mica backdrop, MVVM (CommunityToolkit.Mvvm)
-- **Crypto**: BouncyCastle (ML-KEM-1024, Ed25519), .NET AES-GCM, Konscious.Security (Argon2id)
-- **Virtual Drive**: ASP.NET Core Kestrel (WebDAV server), loopback-only
+- **Crypto**: BouncyCastle (ML-KEM-1024), .NET AES-GCM, Konscious.Security (Argon2id)
+- **Virtual Drive**: Windows Cloud Files API (CldApi) via Vanara.PInvoke
 - **Target**: .NET 8, Windows 10 19041+
 
 ## Building
 
 ```
 dotnet build quantum-drive.csproj -p:Platform=x64
-```
-
-## Generating License Keys
-
-```powershell
-.\tools\generate-license.ps1 -Count 5
 ```

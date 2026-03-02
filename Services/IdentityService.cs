@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using Konscious.Security.Cryptography;
 using quantum_drive.Helpers;
-using Windows.Storage;
 
 namespace quantum_drive.Services;
 
@@ -21,6 +20,7 @@ public class IdentityService : IIdentityService
     private const int RecoveryKeySize = 32; // 256-bit recovery key
 
     private readonly IPostQuantumCrypto _pqCrypto;
+    private readonly string _vaultFolderPath;
 
     private byte[]? _mlKemPrivateKey;
     private byte[]? _mlKemPublicKey;
@@ -33,9 +33,10 @@ public class IdentityService : IIdentityService
     public string? PasswordHint => _passwordHint;
     public string? VaultSaltBase64 => _vaultSaltBase64;
 
-    public IdentityService(IPostQuantumCrypto pqCrypto)
+    public IdentityService(IPostQuantumCrypto pqCrypto, string vaultFolderPath)
     {
         _pqCrypto = pqCrypto;
+        _vaultFolderPath = vaultFolderPath;
     }
 
     public async Task<(byte[] PublicKey, byte[] PrivateKey, string RecoveryKey)> CreateVaultAsync(string password, string? passwordHint = null)
@@ -352,6 +353,25 @@ public class IdentityService : IIdentityService
         }
     }
 
+    public async Task DeleteVaultAsync()
+    {
+        var vaultPath = GetVaultPath();
+        if (File.Exists(vaultPath))
+            await Task.Run(() => File.Delete(vaultPath));
+
+        // Clear in-memory keys
+        if (_mlKemPrivateKey is not null)
+        {
+            CryptographicOperations.ZeroMemory(_mlKemPrivateKey);
+            _mlKemPrivateKey = null;
+        }
+        _mlKemPublicKey = null;
+        _passwordHint = null;
+        _vaultSaltBase64 = null;
+
+        Debug.WriteLine("Vault deleted.");
+    }
+
     private static byte[] EncryptAndCombine(byte[] plaintext, byte[] key, byte[] nonce)
     {
         byte[] ciphertext = EncryptAesGcm(plaintext, key, nonce, out byte[] tag);
@@ -405,10 +425,26 @@ public class IdentityService : IIdentityService
         return plaintext;
     }
 
-    private static string GetVaultPath()
+    public async Task<string?> GetPasswordHintAsync()
     {
-        string localFolder = ApplicationData.Current.LocalFolder.Path;
-        return Path.Combine(localFolder, VaultFileName);
+        var path = GetVaultPath();
+        if (!File.Exists(path)) return null;
+
+        try
+        {
+            string json = await File.ReadAllTextAsync(path);
+            var vault = JsonSerializer.Deserialize<VaultFile>(json);
+            return vault?.PasswordHint;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string GetVaultPath()
+    {
+        return Path.Combine(_vaultFolderPath, VaultFileName);
     }
 
     private sealed class VaultFile

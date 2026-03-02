@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "quantum-drive (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "quantum-drive (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

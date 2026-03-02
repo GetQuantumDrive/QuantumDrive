@@ -18,11 +18,9 @@
             <helpers:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
             <helpers:StepToVisibilityConverter x:Key="StepToVisibilityConverter"/>
             <helpers:DoubleToIntStringConverter x:Key="DoubleToIntStringConverter"/>
-            <helpers:PasswordMismatchVisibilityConverter x:Key="PasswordMismatchVisibilityConverter"/>
-            <helpers:BoolToMatchGlyphConverter x:Key="BoolToMatchGlyphConverter"/>
-            <helpers:BoolToMatchColorConverter x:Key="BoolToMatchColorConverter"/>
-            <helpers:BoolToMatchTextConverter x:Key="BoolToMatchTextConverter"/>
             <helpers:InvertBoolToVisibilityConverter x:Key="InvertBoolToVisibilityConverter"/>
+            <helpers:BoolToLockGlyphConverter x:Key="BoolToLockGlyphConverter"/>
+            <helpers:BoolToLockColorConverter x:Key="BoolToLockColorConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

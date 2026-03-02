@@ -39,6 +39,11 @@ public sealed partial class SettingsPage : Page
         ViewModel.ExportPassword = ExportPasswordBox.Password;
     }
 
+    private void DeletePasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        ViewModel.DeletePassword = DeletePasswordBox.Password;
+    }
+
     private void UpdateNewPasswordEntropyBarColor()
     {
         var bits = ViewModel.NewPasswordEntropyBits;
@@ -73,7 +78,7 @@ public sealed partial class SettingsPage : Page
         if (file is not null)
         {
             await FileIO.WriteTextAsync(file, ViewModel.RecoveryKitText);
-            ViewModel.IsNotificationOpen = true;
+            ViewModel.ShowNotification("Recovery kit saved.");
         }
     }
 }

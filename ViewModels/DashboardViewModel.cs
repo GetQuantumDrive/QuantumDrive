@@ -11,11 +11,9 @@ namespace quantum_drive.ViewModels;
 
 public partial class DashboardViewModel : ObservableObject
 {
-    private readonly ILicenseService _licenseService;
-    private readonly ICloudStorageService _cloudStorageService;
+    private readonly IVaultRegistry _vaultRegistry;
     private readonly INavigationService _navigationService;
     private readonly IVirtualDriveService _virtualDriveService;
-    private bool _limitNotificationShown;
 
     [ObservableProperty]
     private bool _isDriveMounted;
@@ -24,81 +22,36 @@ public partial class DashboardViewModel : ObservableObject
     private bool _isDriveMounting;
 
     [ObservableProperty]
-    private string _driveLabel = "Virtual Drive Q:";
-
-    [ObservableProperty]
-    private string _vaultSizeLabel = "—";
-
-    [ObservableProperty]
-    private string _vaultFileCountLabel = "";
-
-    [ObservableProperty]
-    private string _diskFreeLabel = "—";
-
-    [ObservableProperty]
-    private string _diskFreeDetail = "";
-
-    [ObservableProperty]
-    private double _fileUsagePercent;
-
-    [ObservableProperty]
-    private bool _isFreeTier = true;
+    private string _driveLabel = "Virtual Drive";
 
     [ObservableProperty]
     private string _notificationMessage = string.Empty;
 
     [ObservableProperty]
-    private bool _isNotificationOpen;
+    private double _notificationOpacity;
 
     [ObservableProperty]
-    private Microsoft.UI.Xaml.Controls.InfoBarSeverity _notificationSeverity;
+    private Microsoft.UI.Xaml.Media.Brush _notificationForeground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
 
-    public ObservableCollection<CloudProviderItem> Providers { get; } = new()
-    {
-        new()
-        {
-            Name = "Local Storage",
-            Icon = "\uE7B8",
-            IsLocked = false,
-            Tier = "Free",
-            Description = "Encrypt files on this computer"
-        },
-        new()
-        {
-            Name = "Google Drive",
-            Icon = "\uE753",
-            IsLocked = true,
-            Tier = "Pro",
-            Description = "Sync with Google Drive"
-        },
-        new()
-        {
-            Name = "OneDrive",
-            Icon = "\uE753",
-            IsLocked = true,
-            Tier = "Pro",
-            Description = "Sync with Microsoft OneDrive"
-        },
-        new()
-        {
-            Name = "Dropbox",
-            Icon = "\uE753",
-            IsLocked = true,
-            Tier = "Pro",
-            Description = "Sync with Dropbox"
-        }
-    };
+    public ObservableCollection<VaultStatusItem> VaultList { get; } = new();
+
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
 
     public DashboardViewModel(
-        ILicenseService licenseService,
-        ICloudStorageService cloudStorageService,
+        IVaultRegistry vaultRegistry,
         INavigationService navigationService,
         IVirtualDriveService virtualDriveService)
     {
-        _licenseService = licenseService;
-        _cloudStorageService = cloudStorageService;
+        _vaultRegistry = vaultRegistry;
         _navigationService = navigationService;
         _virtualDriveService = virtualDriveService;
+        _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        _virtualDriveService.FilesChanged += OnDriveFilesChanged;
+    }
+
+    private void OnDriveFilesChanged()
+    {
+        _dispatcherQueue.TryEnqueue(RefreshStats);
     }
 
     async partial void OnIsDriveMountedChanged(bool value)
@@ -113,13 +66,8 @@ public partial class DashboardViewModel : ObservableObject
         {
             if (mount)
             {
-                var provider = _cloudStorageService as LocalStorageProvider;
-                string path = provider?.GetVaultPath()
-                    ?? Windows.Storage.ApplicationData.Current.LocalFolder.Path;
-
-                var letter = await _virtualDriveService.MountAsync(path);
-                var modeSuffix = _virtualDriveService.IsEncryptedMode ? "(Encrypted)" : "(Basic)";
-                DriveLabel = $"Virtual Drive {letter}: {modeSuffix}";
+                var letter = await _virtualDriveService.MountAsync();
+                DriveLabel = $"Virtual Drive {letter}: (Encrypted)";
             }
             else
             {
@@ -130,8 +78,7 @@ public partial class DashboardViewModel : ObservableObject
         catch (Exception ex)
         {
             Debug.WriteLine($"Drive mount/unmount failed: {ex.Message}");
-            ShowNotification($"Failed to {(mount ? "mount" : "unmount")} drive. {ex.Message}",
-                Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error);
+            ShowNotification($"Failed to {(mount ? "mount" : "unmount")} drive. {ex.Message}", isError: true);
 
             // Reset toggle without re-triggering the partial method
 #pragma warning disable MVVMTK0034
@@ -145,8 +92,29 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
+    public void SyncDriveState()
+    {
+        bool mounted = _virtualDriveService.MountedDriveLetter is not null;
+#pragma warning disable MVVMTK0034
+        _isDriveMounted = mounted;
+#pragma warning restore MVVMTK0034
+        OnPropertyChanged(nameof(IsDriveMounted));
+
+        DriveLabel = mounted
+            ? $"Virtual Drive {_virtualDriveService.MountedDriveLetter}: (Encrypted)"
+            : "Virtual Drive";
+    }
+
     public void TryAutoMount()
     {
+        // Check service state first — if already mounted (e.g. navigated back from setup wizard),
+        // just sync UI state instead of trying to mount again.
+        if (_virtualDriveService.MountedDriveLetter is not null)
+        {
+            SyncDriveState();
+            return;
+        }
+
         if (ApplicationData.Current.LocalSettings.Values["AutoMountOnUnlock"] is true
             && !IsDriveMounted && !IsDriveMounting)
         {
@@ -154,61 +122,113 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
-    public void RefreshVaultPath()
-    {
-        RefreshStats();
-    }
-
     public void RefreshStats()
     {
-        try
+        VaultList.Clear();
+
+        foreach (var vault in _vaultRegistry.Vaults)
         {
-            IsFreeTier = !_licenseService.IsPro;
-            var fileLimit = _licenseService.FileLimit;
+            var context = _vaultRegistry.GetContext(vault.Id);
+            int fileCount = 0;
+            long vaultSize = 0;
 
-            var provider = _cloudStorageService as LocalStorageProvider;
-            var vaultDir = provider?.GetVaultPath();
-            if (vaultDir is null || !Directory.Exists(vaultDir))
+            if (Directory.Exists(vault.FolderPath))
             {
-                VaultSizeLabel = IsFreeTier ? "0 of 25" : "0 files";
-                VaultFileCountLabel = "";
-                FileUsagePercent = 0;
-                DiskFreeLabel = "—";
-                DiskFreeDetail = "";
-                return;
+                try
+                {
+                    var qdFiles = Directory.GetFiles(vault.FolderPath, "*.qd");
+                    fileCount = qdFiles.Length;
+                    foreach (var f in qdFiles)
+                        vaultSize += new FileInfo(f).Length;
+                }
+                catch { /* skip inaccessible */ }
             }
 
-            var qdFiles = Directory.GetFiles(vaultDir, "*.qd");
-            int count = qdFiles.Length;
-            long totalSize = 0;
-            foreach (var f in qdFiles)
-                totalSize += new FileInfo(f).Length;
-
-            VaultSizeLabel = IsFreeTier ? $"{count} of {fileLimit}" : $"{count} files";
-            VaultFileCountLabel = FormatBytes(totalSize) + " encrypted";
-            FileUsagePercent = fileLimit == int.MaxValue ? 0 : (double)count / fileLimit * 100;
-
-            if (IsFreeTier && count >= fileLimit - 2 && !_limitNotificationShown)
+            VaultList.Add(new VaultStatusItem
             {
-                _limitNotificationShown = true;
-                var remaining = fileLimit - count;
-                var msg = remaining <= 0
-                    ? "You've reached your file limit. Upgrade to Pro for unlimited files and cloud sync."
-                    : $"You're almost at your file limit ({count}/{fileLimit}). Upgrade to Pro for unlimited files and cloud sync.";
-                ShowNotification(msg, Microsoft.UI.Xaml.Controls.InfoBarSeverity.Informational);
+                Id = vault.Id,
+                Name = vault.Name,
+                IsUnlocked = context?.IsUnlocked ?? false,
+                FileCount = fileCount,
+                SizeLabel = FormatBytes(vaultSize),
+                FolderPath = vault.FolderPath
+            });
+        }
+    }
+
+    public async Task AddVaultAsync(VaultDescriptor descriptor)
+    {
+        RefreshStats();
+
+        if (_virtualDriveService.MountedDriveLetter is not null)
+        {
+            try
+            {
+                await _virtualDriveService.RefreshVaultsAsync();
+                SyncDriveState();
             }
-
-            var driveRoot = Path.GetPathRoot(vaultDir);
-            if (driveRoot is not null)
+            catch (Exception ex)
             {
-                var driveInfo = new DriveInfo(driveRoot);
-                DiskFreeLabel = FormatBytes(driveInfo.AvailableFreeSpace);
-                DiskFreeDetail = $"of {FormatBytes(driveInfo.TotalSize)} total";
+                Debug.WriteLine($"Failed to refresh vaults after add: {ex.Message}");
             }
         }
-        catch (Exception ex)
+    }
+
+    public async Task RemoveVaultAsync(string vaultId)
+    {
+        await _vaultRegistry.RemoveVaultAsync(vaultId);
+        RefreshStats();
+
+        if (_virtualDriveService.MountedDriveLetter is not null)
         {
-            Debug.WriteLine($"Failed to refresh stats: {ex.Message}");
+            try
+            {
+                await _virtualDriveService.RefreshVaultsAsync();
+                SyncDriveState();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to refresh vaults after remove: {ex.Message}");
+            }
+        }
+
+        // If no vaults left, go to setup
+        if (!_vaultRegistry.HasAnyVault)
+        {
+            _navigationService.NavigateTo<SetupWizardPage>();
+        }
+    }
+
+    public async Task LockVaultAsync(string vaultId)
+    {
+        _vaultRegistry.LockVault(vaultId);
+        RefreshStats();
+
+        if (_virtualDriveService.MountedDriveLetter is not null)
+        {
+            await _virtualDriveService.RefreshVaultsAsync();
+            SyncDriveState();
+        }
+
+        ShowNotification("Vault locked.");
+    }
+
+    public async Task UnlockVaultAsync(string vaultId, string password)
+    {
+        bool success = await _vaultRegistry.UnlockVaultAsync(vaultId, password);
+        if (success)
+        {
+            RefreshStats();
+            if (_virtualDriveService.MountedDriveLetter is not null)
+            {
+                await _virtualDriveService.RefreshVaultsAsync();
+                SyncDriveState();
+            }
+            ShowNotification("Vault unlocked.");
+        }
+        else
+        {
+            ShowNotification("Invalid password.", isError: true);
         }
     }
 
@@ -223,26 +243,14 @@ public partial class DashboardViewModel : ObservableObject
         };
     }
 
-    public void OpenProviderStorage(CloudProviderItem provider)
+    [RelayCommand]
+    private void OpenDonatePage()
     {
-        if (provider.IsLocked) return;
-
-        if (provider.Name == "Local Storage")
+        Process.Start(new ProcessStartInfo
         {
-            string? path = _virtualDriveService.MountedDriveLetter is { } letter
-                ? $"{letter}:\\"
-                : (_cloudStorageService as LocalStorageProvider)?.GetVaultPath();
-
-            if (path is not null && Directory.Exists(path))
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = path,
-                    UseShellExecute = true
-                });
-            }
-        }
+            FileName = "https://payment-links.mollie.com/payment/eFm5y2gJzzpzjC2VtpNsX",
+            UseShellExecute = true
+        });
     }
 
     [RelayCommand]
@@ -268,10 +276,27 @@ public partial class DashboardViewModel : ObservableObject
         _navigationService.NavigateTo<SettingsPage>();
     }
 
-    public void ShowNotification(string message, Microsoft.UI.Xaml.Controls.InfoBarSeverity severity)
+    private CancellationTokenSource? _notificationCts;
+
+    public void ShowNotification(string message, bool isError = false)
     {
+        _notificationCts?.Cancel();
         NotificationMessage = message;
-        NotificationSeverity = severity;
-        IsNotificationOpen = true;
+        NotificationForeground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+            isError ? Microsoft.UI.Colors.IndianRed : Microsoft.UI.ColorHelper.FromArgb(255, 160, 160, 170));
+        NotificationOpacity = 1;
+
+        _notificationCts = new CancellationTokenSource();
+        _ = AutoDismissAsync(_notificationCts.Token, isError ? 5000 : 2500);
+    }
+
+    private async Task AutoDismissAsync(CancellationToken token, int delayMs)
+    {
+        try
+        {
+            await Task.Delay(delayMs, token);
+            NotificationOpacity = 0;
+        }
+        catch (OperationCanceledException) { }
     }
 }
