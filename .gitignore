@@ -1,6 +1,7 @@
 # Build outputs
 bin/
 obj/
+out/
 
 # Visual Studio
 .vs/
@@ -8,21 +9,74 @@ obj/
 *.user
 *.userosscache
 *.sln.docstates
-launchSettings.json
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+*.cachefile
+*.aps
+
+# Rider
+.idea/
+*.DotSettings.user
+
+# VS Code
+.vscode/
 
 # NuGet
 *.nupkg
+*.snupkg
 **/packages/
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
 
-# OS files
+# Test results
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+
+# MSIX / AppX packaging
+AppPackages/
+BundleArtifacts/
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.appxupload
+_Pvt_Extensions/
+
+# Code signing — never commit private keys or certificates
+*.pfx
+*.p12
+*.cer
+*.key
+
+# Windows OS files
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs and temporaries
+*.log
+*.tmp
+*.temp
+crash.dmp
+
+# Publish profiles (contain environment-specific paths)
+**/Properties/PublishProfiles/
 
 # Claude Code local settings
 .claude/settings.local.json
 
-# Misc
-*.log
-*.tmp
+# Vault data files — encrypted drive content should never be committed
+*.qd

@@ -19,11 +19,23 @@
                            VerticalAlignment="Center"/>
             </StackPanel>
 
-            <!-- Notification Bar -->
-            <InfoBar Title="{x:Bind ViewModel.NotificationMessage, Mode=OneWay}"
-                     Severity="{x:Bind ViewModel.NotificationSeverity, Mode=OneWay}"
-                     IsOpen="{x:Bind ViewModel.IsNotificationOpen, Mode=TwoWay}"
-                     IsClosable="True"/>
+            <!-- Notification -->
+            <TextBlock Text="{x:Bind ViewModel.NotificationMessage, Mode=OneWay}"
+                       FontSize="13"
+                       Opacity="{x:Bind ViewModel.NotificationOpacity, Mode=OneWay}"
+                       Foreground="{x:Bind ViewModel.NotificationForeground, Mode=OneWay}"
+                       IsTextSelectionEnabled="False">
+                <TextBlock.OpacityTransition>
+                    <ScalarTransition Duration="0:0:0.3"/>
+                </TextBlock.OpacityTransition>
+            </TextBlock>
+
+            <!-- Vault Selector -->
+            <ComboBox Header="Vault"
+                      ItemsSource="{x:Bind ViewModel.VaultList}"
+                      SelectedItem="{x:Bind ViewModel.SelectedVault, Mode=TwoWay}"
+                      DisplayMemberPath="Name"
+                      HorizontalAlignment="Stretch"/>
 
             <!-- ═══════ Section 1: General ═══════ -->
             <TextBlock Text="General" FontSize="18" FontWeight="SemiBold"/>
@@ -92,29 +104,7 @@
                 </StackPanel>
             </Border>
 
-            <!-- ═══════ Section 2: License ═══════ -->
-            <TextBlock Text="License &amp; Subscription" FontSize="18" FontWeight="SemiBold"/>
-
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    CornerRadius="10" Padding="24">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="{x:Bind ViewModel.CurrentTier, Mode=OneWay}"
-                               FontSize="16" FontWeight="SemiBold"/>
-
-                    <TextBox Header="Enter License Key"
-                             PlaceholderText="QDRIVE-PRO-XXXX-XXXX"
-                             Text="{x:Bind ViewModel.LicenseKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-
-                    <Button Content="Activate License"
-                            Style="{StaticResource AccentButtonStyle}"
-                            Command="{x:Bind ViewModel.ActivateLicenseCommand}"/>
-
-                    <TextBlock TextWrapping="Wrap" Opacity="0.7" FontSize="12"
-                               Text="Pro features: Multi-cloud (OneDrive, Dropbox), Post-Quantum encryption (ML-KEM-768), Priority support"/>
-                </StackPanel>
-            </Border>
-
-            <!-- ═══════ Section 3: Session ═══════ -->
+            <!-- ═══════ Section: Session ═══════ -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="10" Padding="24">
                 <Grid>
@@ -125,7 +115,7 @@
 
                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                         <TextBlock Text="Log Out" FontWeight="SemiBold"/>
-                        <TextBlock Text="Lock the vault and return to the login screen"
+                        <TextBlock Text="Lock all vaults and return to the dashboard"
                                    FontSize="13" Opacity="0.5" TextWrapping="Wrap"/>
                     </StackPanel>
 
@@ -139,13 +129,12 @@
                 </Grid>
             </Border>
 
-            <!-- ═══════ Section 4: Danger Zone ═══════ -->
-            <TextBlock Text="Danger Zone" FontSize="18" FontWeight="SemiBold" Foreground="Red"/>
+            <!-- ═══════ Section: Recovery Kit ═══════ -->
+            <TextBlock Text="Recovery Kit" FontSize="18" FontWeight="SemiBold"/>
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="Red" BorderThickness="1" CornerRadius="10" Padding="24">
+                    CornerRadius="10" Padding="24">
                 <StackPanel Spacing="16">
-                    <TextBlock Text="Export Recovery Kit" FontWeight="SemiBold"/>
                     <TextBlock Text="Export your vault recovery information. You will need to confirm your password."
                                TextWrapping="Wrap" Opacity="0.7" FontSize="13"/>
 
@@ -179,6 +168,38 @@
                             </StackPanel>
                         </Button>
                     </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════ Section: Danger Zone ═══════ -->
+            <TextBlock Text="Danger Zone" FontSize="18" FontWeight="SemiBold" Foreground="Red"/>
+
+            <!-- Delete Vault -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="Red" BorderThickness="1" CornerRadius="10" Padding="24">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Delete Vault" FontWeight="SemiBold"/>
+                    <TextBlock Text="Permanently delete your vault, all encrypted files, and your keys. This action cannot be undone."
+                               TextWrapping="Wrap" Opacity="0.7" FontSize="13"/>
+
+                    <PasswordBox x:Name="DeletePasswordBox"
+                                 Header="Confirm Password"
+                                 PlaceholderText="Enter master password"
+                                 PasswordChanged="DeletePasswordBox_PasswordChanged"/>
+
+                    <CheckBox Content="I understand that all my encrypted data will be permanently deleted"
+                              IsChecked="{x:Bind ViewModel.IsDeleteConfirmed, Mode=TwoWay}"/>
+
+                    <Button Command="{x:Bind ViewModel.DeleteVaultCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsDeleteVaultValid, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE74D;" FontSize="16" Foreground="Red"/>
+                            <TextBlock Text="Delete Vault" Foreground="Red"/>
+                        </StackPanel>
+                    </Button>
+
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsDeletingVault, Mode=OneWay}"
+                                  Width="24" Height="24" HorizontalAlignment="Left"/>
                 </StackPanel>
             </Border>
 

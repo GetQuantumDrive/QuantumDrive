@@ -13,4 +13,6 @@ public interface IIdentityService
     Task ChangePasswordAsync(string oldPassword, string newPassword);
     Task<bool> RecoverWithKeyAsync(string recoveryKey, string newPassword);
     Task<string?> GetRecoveryKeyAsync(string password);
+    Task DeleteVaultAsync();
+    Task<string?> GetPasswordHintAsync();
 }

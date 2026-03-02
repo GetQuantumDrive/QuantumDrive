@@ -25,19 +25,18 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Clean up stale registry entries from previous crashed sessions
+        VirtualDriveService.CleanupStaleEntries();
+
         var services = new ServiceCollection();
 
         // Services
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IPostQuantumCrypto, PostQuantumCrypto>();
-        services.AddSingleton<IIdentityService, IdentityService>();
-        services.AddSingleton<ICryptoService, CryptoService>();
-        services.AddSingleton<ICloudStorageService, LocalStorageProvider>();
-        services.AddSingleton<ILicenseService, LicenseService>();
+        services.AddSingleton<IVaultRegistry, VaultRegistry>();
         services.AddSingleton<IVirtualDriveService, VirtualDriveService>();
 
         // ViewModels
-        services.AddTransient<LockScreenViewModel>();
         services.AddTransient<SetupWizardViewModel>();
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<SettingsViewModel>();
@@ -55,10 +54,10 @@ public partial class App : Application
         navigationService.SetFrame(mainWindow.NavigationFrame);
 
         // Route to appropriate page
-        var identityService = _services.GetRequiredService<IIdentityService>();
-        if (identityService.IsVaultCreated)
+        var vaultRegistry = _services.GetRequiredService<IVaultRegistry>();
+        if (vaultRegistry.HasAnyVault)
         {
-            navigationService.NavigateTo<LockScreenPage>();
+            navigationService.NavigateTo<DashboardPage>();
         }
         else
         {
@@ -73,7 +72,12 @@ public partial class App : Application
             var driveService = _services?.GetService<IVirtualDriveService>();
             if (driveService?.MountedDriveLetter is not null)
             {
-                driveService.UnmountAsync().GetAwaiter().GetResult();
+                // Force unmount with a timeout to avoid hanging the close
+                var unmountTask = driveService.ForceUnmountAsync();
+                if (!unmountTask.Wait(TimeSpan.FromSeconds(3)))
+                {
+                    Debug.WriteLine("Unmount timed out on window close — proceeding with shutdown.");
+                }
             }
         }
         catch (Exception ex)

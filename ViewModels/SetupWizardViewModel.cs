@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using quantum_drive.Helpers;
@@ -10,17 +11,20 @@ namespace quantum_drive.ViewModels;
 
 public partial class SetupWizardViewModel : ObservableObject
 {
-    private readonly IIdentityService _identityService;
+    private readonly IVaultRegistry _vaultRegistry;
     private readonly INavigationService _navigationService;
 
     [ObservableProperty]
     private int _currentStep;
 
     [ObservableProperty]
-    private string _password = string.Empty;
+    private string _vaultName = "My Vault";
 
     [ObservableProperty]
-    private string _confirmPassword = string.Empty;
+    private string _vaultFolderPath = string.Empty;
+
+    [ObservableProperty]
+    private string _password = string.Empty;
 
     [ObservableProperty]
     private double _entropyBits;
@@ -53,21 +57,27 @@ public partial class SetupWizardViewModel : ObservableObject
     private string _errorMessage = string.Empty;
 
     [ObservableProperty]
-    private bool _passwordsMatch;
+    private bool _hasAcceptedTerms;
+
+    private StorageFolder? _pickedFolder;
+
+    public bool CanGetStarted => HasAcceptedTerms;
 
     public bool IsPasswordValid =>
-        EntropyBits >= 60
-        && !string.IsNullOrEmpty(ConfirmPassword)
-        && Password == ConfirmPassword;
+        !string.IsNullOrEmpty(Password)
+        && !string.IsNullOrEmpty(VaultName);
 
     public bool CanFinish => HasAcknowledgedRisk;
 
     public int TotalSteps => 3;
 
-    public SetupWizardViewModel(IIdentityService identityService, INavigationService navigationService)
+    public SetupWizardViewModel(IVaultRegistry vaultRegistry, INavigationService navigationService)
     {
-        _identityService = identityService;
+        _vaultRegistry = vaultRegistry;
         _navigationService = navigationService;
+
+        // Default folder path
+        _vaultFolderPath = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
     }
 
     partial void OnPasswordChanged(string value)
@@ -75,14 +85,17 @@ public partial class SetupWizardViewModel : ObservableObject
         EntropyBits = EntropyCalculator.CalculateBits(value);
         StrengthLabel = EntropyCalculator.GetStrengthLabel(EntropyBits);
         TimeToCrack = EntropyCalculator.GetTimeToCrack(EntropyBits);
-        PasswordsMatch = !string.IsNullOrEmpty(ConfirmPassword) && value == ConfirmPassword;
         OnPropertyChanged(nameof(IsPasswordValid));
     }
 
-    partial void OnConfirmPasswordChanged(string value)
+    partial void OnVaultNameChanged(string value)
     {
-        PasswordsMatch = !string.IsNullOrEmpty(value) && Password == value;
         OnPropertyChanged(nameof(IsPasswordValid));
+    }
+
+    partial void OnHasAcceptedTermsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanGetStarted));
     }
 
     partial void OnHasAcknowledgedRiskChanged(bool value)
@@ -108,6 +121,12 @@ public partial class SetupWizardViewModel : ObservableObject
         }
     }
 
+    public void SetVaultFolder(StorageFolder folder)
+    {
+        _pickedFolder = folder;
+        VaultFolderPath = folder.Path;
+    }
+
     [RelayCommand]
     private async Task CreateVaultAsync()
     {
@@ -118,22 +137,32 @@ public partial class SetupWizardViewModel : ObservableObject
 
         try
         {
-            var (publicKey, _, recoveryKey) = await _identityService.CreateVaultAsync(Password, PasswordHint);
+            var descriptor = await _vaultRegistry.RegisterNewVaultAsync(
+                VaultName.Trim(), VaultFolderPath, Password, PasswordHint, _pickedFolder);
 
-            RecoveryKey = recoveryKey;
+            var context = _vaultRegistry.GetContext(descriptor.Id);
+            var publicKey = context?.Identity.MlKemPublicKey;
+            var recoveryKeyStr = context is not null
+                ? await context.Identity.GetRecoveryKeyAsync(Password)
+                : null;
 
-            // Generate fingerprint from public key (first 16 bytes as hex, formatted XXXX-XXXX-...)
-            string hex = Convert.ToHexString(publicKey.Take(16).ToArray());
-            PublicKeyFingerprint = string.Join("-", Enumerable.Range(0, hex.Length / 4)
-                .Select(i => hex.Substring(i * 4, Math.Min(4, hex.Length - i * 4))));
+            RecoveryKey = recoveryKeyStr ?? string.Empty;
 
-            // Build recovery kit text
-            string salt = _identityService.VaultSaltBase64 ?? "N/A";
-            RecoveryKitText = BuildRecoveryKitText(PublicKeyFingerprint, salt, PasswordHint, recoveryKey);
+            // Generate fingerprint from public key
+            string fingerprint = "N/A";
+            if (publicKey is not null)
+            {
+                string hex = Convert.ToHexString(publicKey.Take(16).ToArray());
+                fingerprint = string.Join("-", Enumerable.Range(0, hex.Length / 4)
+                    .Select(i => hex.Substring(i * 4, Math.Min(4, hex.Length - i * 4))));
+            }
+            PublicKeyFingerprint = fingerprint;
+
+            string salt = context?.Identity.VaultSaltBase64 ?? "N/A";
+            RecoveryKitText = BuildRecoveryKitText(PublicKeyFingerprint, salt, PasswordHint, recoveryKeyStr);
 
             Debug.WriteLine($"Vault created. Fingerprint: {PublicKeyFingerprint}");
 
-            // Move to recovery kit step
             CurrentStep = 2;
         }
         catch (Exception ex)
@@ -159,7 +188,6 @@ public partial class SetupWizardViewModel : ObservableObject
     private void FinishSetup()
     {
         Debug.WriteLine("Setup complete — navigating to Dashboard.");
-        // User is already authenticated after vault creation, go directly to Dashboard
         _navigationService.NavigateTo<DashboardPage>();
     }
 

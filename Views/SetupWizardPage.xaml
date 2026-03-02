@@ -44,25 +44,30 @@
                 <StackPanel Spacing="20"
                             Visibility="{x:Bind ViewModel.CurrentStep, Mode=OneWay, Converter={StaticResource StepToVisibilityConverter}, ConverterParameter=0}">
 
-                    <!-- Animated Key Icon -->
-                    <FontIcon x:Name="KeyIcon" Glyph="&#xE192;"
-                              FontSize="64" Opacity="0"
-                              Foreground="{StaticResource QuantumVioletBrush}"
-                              HorizontalAlignment="Center"
-                              RenderTransformOrigin="0.5,0.5">
-                        <FontIcon.RenderTransform>
+                    <!-- App Logo -->
+                    <Image x:Name="KeyIcon"
+                           Source="ms-appx:///Assets/Square150x150Logo.scale-200.png"
+                           Width="80" Height="80" Opacity="0"
+                           HorizontalAlignment="Center"
+                           RenderTransformOrigin="0.5,0.5">
+                        <Image.RenderTransform>
                             <ScaleTransform x:Name="KeyIconScale"/>
-                        </FontIcon.RenderTransform>
-                    </FontIcon>
+                        </Image.RenderTransform>
+                    </Image>
 
                     <TextBlock Text="Welcome to QuantumDrive"
                                FontSize="32" FontWeight="Bold"
                                HorizontalAlignment="Center"
                                Foreground="{StaticResource QuantumVioletBrush}"/>
 
-                    <TextBlock Text="Military-Grade Encryption for Your Cloud Files"
-                               FontSize="16" Opacity="0.8"
-                               HorizontalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                        <TextBlock Text="Post-Quantum Encryption for Your Files"
+                                   FontSize="16" Opacity="0.8"/>
+                        <Border Background="{StaticResource QuantumVioletBrush}" CornerRadius="4" Padding="8,2">
+                            <TextBlock Text="PUBLIC BETA" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="White"/>
+                        </Border>
+                    </StackPanel>
 
                     <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -77,22 +82,59 @@
                                 <TextBlock Text="&#x2022; Even we cannot decrypt your files" TextWrapping="Wrap"/>
                             </StackPanel>
 
-                            <TextBlock Text="Post-Quantum Encryption: ML-KEM-768 + AES-256-GCM"
+                            <TextBlock Text="Post-Quantum Encryption: ML-KEM-1024 + AES-256-GCM"
                                        FontWeight="SemiBold" Opacity="0.8" Margin="0,8,0,0"/>
 
                             <StackPanel Spacing="4">
                                 <TextBlock Text="&#x2713; End-to-end encryption" Foreground="{StaticResource QuantumVioletBrush}"/>
                                 <TextBlock Text="&#x2713; Post-quantum secure" Foreground="{StaticResource QuantumVioletBrush}"/>
-                                <TextBlock Text="&#x2713; Multi-cloud support (Pro tier)" Foreground="{StaticResource QuantumVioletBrush}"/>
+                                <TextBlock Text="&#x2713; Unlimited files, completely free" Foreground="{StaticResource QuantumVioletBrush}"/>
                                 <TextBlock Text="&#x2713; Open-source security" Foreground="{StaticResource QuantumVioletBrush}"/>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Terms & Conditions -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="24">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="Terms &amp; Conditions" FontWeight="SemiBold"/>
+                            <ScrollViewer MaxHeight="160" Padding="0,0,8,0">
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.7" LineHeight="18">
+                                    <Run FontWeight="SemiBold">Public Beta Notice</Run>
+                                    <LineBreak/>
+                                    QuantumDrive is currently in public beta. Features may change, and bugs may occur. Use at your own discretion.
+                                    <LineBreak/><LineBreak/>
+                                    <Run FontWeight="SemiBold">Disclaimer of Warranty</Run>
+                                    <LineBreak/>
+                                    This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and non-infringement.
+                                    <LineBreak/><LineBreak/>
+                                    <Run FontWeight="SemiBold">Limitation of Liability</Run>
+                                    <LineBreak/>
+                                    In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software. This includes, but is not limited to, any loss of data, loss of profits, or any indirect, incidental, special, or consequential damages.
+                                    <LineBreak/><LineBreak/>
+                                    <Run FontWeight="SemiBold">Data Responsibility</Run>
+                                    <LineBreak/>
+                                    You are solely responsible for maintaining backups of your data. QuantumDrive uses zero-knowledge encryption — if you lose your master password and recovery kit, your data cannot be recovered by anyone, including the developers.
+                                    <LineBreak/><LineBreak/>
+                                    By proceeding, you acknowledge that you have read and agree to these terms.
+                                </TextBlock>
+                            </ScrollViewer>
+                            <CheckBox Content="I accept the Terms &amp; Conditions"
+                                      IsChecked="{x:Bind ViewModel.HasAcceptedTerms, Mode=TwoWay}"/>
                         </StackPanel>
                     </Border>
 
                     <Button Content="Get Started"
                             HorizontalAlignment="Stretch"
                             Style="{StaticResource AccentButtonStyle}"
-                            Command="{x:Bind ViewModel.NextStepCommand}"/>
+                            Command="{x:Bind ViewModel.NextStepCommand}"
+                            IsEnabled="{x:Bind ViewModel.CanGetStarted, Mode=OneWay}"/>
+
+                    <HyperlinkButton Content="I already have a vault"
+                                     HorizontalAlignment="Center"
+                                     Click="ImportExistingVault_Click"/>
                 </StackPanel>
 
                 <!-- ════════════ STEP 1: Password Creation ════════════ -->
@@ -106,15 +148,31 @@
                     <TextBlock Text="This password protects your vault. It cannot be recovered if lost."
                                TextWrapping="Wrap" Opacity="0.7"/>
 
+                    <!-- Vault Name -->
+                    <TextBox Header="Vault Name"
+                             PlaceholderText="e.g., My Vault"
+                             Text="{x:Bind ViewModel.VaultName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             MaxLength="50"/>
+
+                    <!-- Vault Folder -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Vault Folder" FontWeight="SemiBold" FontSize="14"/>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{x:Bind ViewModel.VaultFolderPath, Mode=OneWay}"
+                                       FontSize="12" Opacity="0.6" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <Button Grid.Column="1" Content="Browse..." Click="BrowseVaultFolder_Click"/>
+                        </Grid>
+                    </StackPanel>
+
                     <PasswordBox x:Name="PasswordBox"
                                  Header="Create Master Password"
                                  PlaceholderText="Enter a strong password"
                                  PasswordChanged="PasswordBox_PasswordChanged"/>
-
-                    <PasswordBox x:Name="ConfirmPasswordBox"
-                                 Header="Confirm Password"
-                                 PlaceholderText="Re-enter your password"
-                                 PasswordChanged="ConfirmPasswordBox_PasswordChanged"/>
 
                     <!-- Entropy Meter -->
                     <StackPanel Spacing="8">
@@ -132,17 +190,6 @@
                             <Run Text="Time to crack: "/>
                             <Run Text="{x:Bind ViewModel.TimeToCrack, Mode=OneWay}"/>
                         </TextBlock>
-                    </StackPanel>
-
-                    <!-- Password match indicator -->
-                    <StackPanel Orientation="Horizontal" Spacing="6"
-                                Visibility="{x:Bind ViewModel.ConfirmPassword, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}">
-                        <FontIcon Glyph="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchGlyphConverter}}"
-                                  FontSize="14"
-                                  Foreground="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchColorConverter}}"/>
-                        <TextBlock Text="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchTextConverter}}"
-                                   FontSize="12"
-                                   Foreground="{x:Bind ViewModel.PasswordsMatch, Mode=OneWay, Converter={StaticResource BoolToMatchColorConverter}}"/>
                     </StackPanel>
 
                     <!-- Password Hint -->

@@ -1,0 +1,199 @@
+QuantumDrive Security Assessment — v1 (QDRIVE01 Format)
+=======================================================
+Date: 2026-02-23
+Status: Release candidate (v1.0.0)
+
+This document records the security posture of QuantumDrive v1, identifies
+known limitations, and lists items deferred to v2 (cloud provider integrations).
+
+
+1. CRYPTOGRAPHIC PRIMITIVES
+───────────────────────────
+
+  Component          | Algorithm            | Parameters
+  ─────────────────  │ ──────────────────── │ ──────────────────────────────────
+  Key Encapsulation  | ML-KEM-1024          | FIPS 203, via BouncyCastle
+  Key Derivation     | HKDF-SHA256          | info="qdrive1-fek", 32-byte output
+  File Encryption    | AES-256-GCM          | 12-byte nonce, 16-byte tag
+  Password Hashing   | Argon2id             | 64MB memory, 3 iterations, 4 lanes
+  Key Wrapping       | AES-256-GCM          | Wraps ML-KEM private key with Argon2id output
+
+  Assessment: All primitives are NIST-approved or NIST-recommended. ML-KEM-1024
+  provides NIST Security Level 5 (post-quantum). AES-256-GCM is the gold standard
+  for authenticated encryption. Argon2id is the winner of the Password Hashing
+  Competition and is recommended by OWASP for password-based key derivation.
+
+
+2. FILE FORMAT (QDRIVE01)
+─────────────────────────
+
+  Layout:
+    QDRIVE01(8) | Capsule(1568) | MetaNonce(12) | MetaLen(4) | MetaTag(16) |
+    MetaCiphertext(var) | DataNoncePrefix(8) | [Tag(16)+Chunk(≤64KB)]...
+
+  Properties achieved:
+    ✓ Metadata encrypted (filenames, sizes, timestamps not visible)
+    ✓ HKDF key derivation from ML-KEM shared secret (defense-in-depth)
+    ✓ Capsule as AAD on all AES-GCM operations (binds ciphertext to KEM)
+    ✓ Chunked AEAD with 64KB chunks (streaming, constant ~128KB memory)
+    ✓ Counter nonces with random prefix (safe for 2^32 chunks per file)
+    ✓ Independent chunk authentication (tamper detection per chunk)
+    ✓ Each file gets a unique ML-KEM encapsulation (unique file key)
+    ✓ IND-CPA: same plaintext → different ciphertext every time
+
+  Limitations:
+    - No chunk ordering verification beyond sequential counter nonces.
+      An attacker with write access to the vault folder could reorder or
+      truncate chunks. Mitigated by: the vault folder is on the local
+      filesystem and the attacker would need OS-level access. For v2 with
+      cloud sync, consider adding a Merkle tree or chunk commitment hash
+      in the metadata.
+    - File count and approximate file sizes are visible to anyone with
+      access to the vault folder (they can see .qd files and their sizes).
+      The encrypted size reveals approximate plaintext size (overhead is
+      fixed per chunk). True deniability would require padding or a
+      container format, which is out of scope for v1.
+
+
+3. KEY MANAGEMENT
+─────────────────
+
+  Current approach:
+    - ML-KEM keypair generated once during vault creation
+    - Private key wrapped with AES-256-GCM using Argon2id(password)
+    - Wrapped key stored in .quantum_vault/vault.identity
+    - Public key stored in plaintext (by design — needed for encryption)
+
+  ✓ IMPLEMENTED:
+    - Argon2id with strong parameters (64MB, 3 iterations)
+    - Unique salt per vault
+    - Private key zeroed after use (CryptographicOperations.ZeroMemory)
+    - File encryption keys zeroed after use
+    - Shared secrets zeroed immediately after HKDF derivation
+
+  DEFERRED TO v2:
+    - Private key pinning in memory (VirtualLock/mlock). Currently the
+      GC may copy the private key during compaction. For v1 this is
+      acceptable (local-only app, attacker with memory access has already
+      won). For v2 with longer-running cloud sync sessions, consider
+      pinning via GCHandle.Alloc(Pinned) + VirtualLock.
+    - Key rotation mechanism. Currently there is no way to rotate the
+      ML-KEM keypair without re-encrypting all files. For v1 (local only,
+      single user), this is acceptable. For v2, implement key rotation:
+      generate new keypair, re-encrypt all file keys (just the capsule +
+      metadata, not the data), update vault.identity.
+    - Hardware key storage (TPM/Windows Hello). For v2, consider storing
+      the wrapped private key in the TPM or using Windows Hello for
+      biometric unlock as an alternative to password entry.
+
+
+4. VIRTUAL DRIVE SECURITY (Cloud Files API)
+───────────────────────────────────────────
+
+  ✓ Native NTFS placeholder files (no network protocol involved)
+  ✓ Kernel-level callbacks via CldFlt minifilter (not user-space HTTP)
+  ✓ Streaming I/O (FETCH_DATA decrypts in 64KB chunks, constant memory)
+  ✓ Files appear as local — no Protected View in Office, no zone checks
+  ✓ Sync root scoped to per-user %USERPROFILE%\QuantumDrive\
+
+  Properties:
+    - No network socket exposed. Unlike WebDAV (which exposes a localhost
+      HTTP server), CFAPI operates entirely through kernel callbacks.
+      Other local processes cannot connect to a port to read file data.
+    - File data is only hydrated on demand. Placeholder files consume no
+      disk space until an application reads them. Once the app closes the
+      file handle, the plaintext data is not persisted.
+    - FileSystemWatcher monitors the sync root for writes and re-encrypts
+      modified files back to the vault folder.
+
+
+5. PASSWORD STRENGTH
+────────────────────
+
+  ✓ Entropy calculator with pattern detection:
+    - Character class pool estimation
+    - Penalty for repeated characters
+    - Penalty for sequential runs (ASCII + QWERTY adjacency)
+    - Penalty for common passwords/dictionary words
+    - Penalty for single character class (all digits, all lowercase)
+
+  DEFERRED TO v2:
+    - Full dictionary check (e.g., zxcvbn-style). The current common
+      password list is small (~23 entries). A proper dictionary attack
+      simulator like zxcvbn would give much better estimates. Consider
+      porting zxcvbn or using a Bloom filter of the top 100K passwords.
+    - Breach database check (Have I Been Pwned k-anonymity API). Could
+      check the password hash prefix against HIBP to warn users if their
+      password has appeared in known breaches. Privacy-safe (only sends
+      first 5 chars of SHA-1 hash).
+
+
+6. IDENTITY & RECOVERY
+──────────────────────
+
+  ✓ Recovery kit contains base64-encoded private key
+  ✓ Recovery kit can be saved to user-chosen location via FileSavePicker
+  ✓ Password hint removed (was potential information leak)
+
+  DEFERRED TO v2:
+    - Shamir's Secret Sharing for recovery. Split the private key into
+      N shares where K-of-N are needed to reconstruct. Better than a
+      single recovery file that is a single point of compromise.
+    - Recovery key encryption. The recovery kit currently contains the
+      raw private key in base64. Consider encrypting it with a separate
+      recovery password.
+
+
+7. PLATFORM / PACKAGING
+───────────────────────
+
+  ✓ MSIX packaging with runFullTrust capability
+  ✓ FutureAccessList tokens for folder permission persistence
+  ✓ Stale registry cleanup on startup (drive icons, CLSID entries)
+  ✓ Graceful + forced unmount on app close
+
+  DEFERRED TO v2:
+    - Audit logging. Currently no persistent log of vault operations
+      (mount, unmount, file access). For enterprise/compliance use cases,
+      consider an encrypted audit log.
+    - Auto-lock on idle. Lock the vault (unmount drive) after N minutes
+      of inactivity. Requires monitoring user input or using Windows
+      session lock events.
+
+
+8. THREAT MODEL SUMMARY
+────────────────────────
+
+  v1 protects against:
+    ✓ Stolen/lost device (files encrypted at rest with PQ-safe crypto)
+    ✓ Cloud storage provider reading files (encrypted before upload, in v2)
+    ✓ Casual snooping (drive only accessible while app is running + unlocked)
+    ✓ Quantum computer attacks on key exchange (ML-KEM-1024)
+    ✓ Brute force on password (Argon2id with 64MB memory cost)
+    ✓ Confirmation attacks (no plaintext hashes or filenames visible)
+
+  v1 does NOT protect against:
+    ✗ Attacker with kernel/admin access on running machine (can read memory)
+    ✗ Attacker who can modify vault files (chunk reordering, no Merkle tree)
+    ✗ File count and approximate size inference from .qd file sizes
+    ✗ Side-channel attacks on AES-GCM (mitigated by hardware AES-NI)
+    ✗ Compromised QuantumDrive binary (no code signing verification yet)
+
+
+9. V2 ROADMAP SECURITY ITEMS
+─────────────────────────────
+
+  Priority | Item                              | Effort | Notes
+  ──────── │ ───────────────────────────────── │ ────── │ ──────────────────────────
+  HIGH     | Chunk commitment (Merkle tree)     | Medium | Required for cloud sync integrity
+  HIGH     | Key rotation                       | Medium | Re-encrypt capsules only, not data
+  HIGH     | Auto-lock on idle                  | Low    | Session lock event + timer
+  MEDIUM   | Private key memory pinning         | Low    | GCHandle.Alloc + VirtualLock
+  MEDIUM   | zxcvbn password strength           | Low    | Port or Bloom filter approach
+  MEDIUM   | Recovery key encryption            | Low    | Second password for recovery file
+  MEDIUM   | Dehydrate on app close             | Low    | Remove hydrated data from sync root
+  LOW      | HIBP breach check                  | Low    | k-anonymity API, opt-in
+  LOW      | Audit logging                      | Medium | Encrypted log file
+  LOW      | Shamir's Secret Sharing            | Medium | K-of-N recovery
+  LOW      | TPM / Windows Hello integration    | High   | Platform-specific, requires testing
+  LOW      | File size padding                  | High   | Significant storage overhead
