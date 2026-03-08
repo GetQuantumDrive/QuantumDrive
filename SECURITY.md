@@ -1,5 +1,11 @@
-QuantumDrive Security Assessment — v1 (QDRIVE01 Format)
-=======================================================
+## Reporting a Vulnerability
+
+If you discover a security vulnerability in QuantumDrive, please report it privately via [GitHub Security Advisories](https://github.com/GetQuantumDrive/QuantumDrive/security/advisories/new) rather than opening a public issue. We will respond as soon as possible and coordinate a fix before public disclosure.
+
+---
+
+# QuantumDrive Security Assessment — v1 (QDRIVE01 Format)
+
 Date: 2026-02-23
 Status: Release candidate (v1.0.0)
 
@@ -7,8 +13,7 @@ This document records the security posture of QuantumDrive v1, identifies
 known limitations, and lists items deferred to v2 (cloud provider integrations).
 
 
-1. CRYPTOGRAPHIC PRIMITIVES
-───────────────────────────
+## 1. Cryptographic Primitives
 
   Component          | Algorithm            | Parameters
   ─────────────────  │ ──────────────────── │ ──────────────────────────────────
@@ -24,8 +29,7 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
   Competition and is recommended by OWASP for password-based key derivation.
 
 
-2. FILE FORMAT (QDRIVE01)
-─────────────────────────
+## 2. File Format (QDRIVE01)
 
   Layout:
     QDRIVE01(8) | Capsule(1568) | MetaNonce(12) | MetaLen(4) | MetaTag(16) |
@@ -55,8 +59,7 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
       container format, which is out of scope for v1.
 
 
-3. KEY MANAGEMENT
-─────────────────
+## 3. Key Management
 
   Current approach:
     - ML-KEM keypair generated once during vault creation
@@ -87,8 +90,7 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
       biometric unlock as an alternative to password entry.
 
 
-4. VIRTUAL DRIVE SECURITY (Cloud Files API)
-───────────────────────────────────────────
+## 4. Virtual Drive Security (Cloud Files API)
 
   ✓ Native NTFS placeholder files (no network protocol involved)
   ✓ Kernel-level callbacks via CldFlt minifilter (not user-space HTTP)
@@ -107,8 +109,7 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
       modified files back to the vault folder.
 
 
-5. PASSWORD STRENGTH
-────────────────────
+## 5. Password Strength
 
   ✓ Entropy calculator with pattern detection:
     - Character class pool estimation
@@ -128,8 +129,7 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
       first 5 chars of SHA-1 hash).
 
 
-6. IDENTITY & RECOVERY
-──────────────────────
+## 6. Identity & Recovery
 
   ✓ Recovery kit contains base64-encoded private key
   ✓ Recovery kit can be saved to user-chosen location via FileSavePicker
@@ -144,13 +144,13 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
       recovery password.
 
 
-7. PLATFORM / PACKAGING
-───────────────────────
+## 7. Platform / Packaging
 
   ✓ MSIX packaging with runFullTrust capability
   ✓ FutureAccessList tokens for folder permission persistence
   ✓ Stale registry cleanup on startup (drive icons, CLSID entries)
   ✓ Graceful + forced unmount on app close
+  ✓ Signed binary (SignPath open source certificate, verifiable via GitHub Actions)
 
   DEFERRED TO v2:
     - Audit logging. Currently no persistent log of vault operations
@@ -161,8 +161,7 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
       session lock events.
 
 
-8. THREAT MODEL SUMMARY
-────────────────────────
+## 8. Threat Model Summary
 
   v1 protects against:
     ✓ Stolen/lost device (files encrypted at rest with PQ-safe crypto)
@@ -171,17 +170,16 @@ known limitations, and lists items deferred to v2 (cloud provider integrations).
     ✓ Quantum computer attacks on key exchange (ML-KEM-1024)
     ✓ Brute force on password (Argon2id with 64MB memory cost)
     ✓ Confirmation attacks (no plaintext hashes or filenames visible)
+    ✓ Tampered binary (signed via SignPath, reproducible from GitHub Actions)
 
   v1 does NOT protect against:
     ✗ Attacker with kernel/admin access on running machine (can read memory)
     ✗ Attacker who can modify vault files (chunk reordering, no Merkle tree)
     ✗ File count and approximate size inference from .qd file sizes
     ✗ Side-channel attacks on AES-GCM (mitigated by hardware AES-NI)
-    ✗ Compromised QuantumDrive binary (no code signing verification yet)
 
 
-9. V2 ROADMAP SECURITY ITEMS
-─────────────────────────────
+## 9. V2 Roadmap Security Items
 
   Priority | Item                              | Effort | Notes
   ──────── │ ───────────────────────────────── │ ────── │ ──────────────────────────
