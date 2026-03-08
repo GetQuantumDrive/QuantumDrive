@@ -1,5 +1,8 @@
 # QuantumDrive
 
+[![CI](https://github.com/GetQuantumDrive/QuantumDrive/actions/workflows/ci.yml/badge.svg)](https://github.com/GetQuantumDrive/QuantumDrive/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE.md)
+
 Zero-knowledge encrypted virtual drive for Windows. Files are encrypted transparently using post-quantum cryptography before they touch disk.
 
 ## How It Works
@@ -80,4 +83,15 @@ A 256-bit recovery key is generated during vault creation, encoded as Base32 gro
 
 ```
 dotnet build quantum-drive.csproj -p:Platform=x64
+dotnet test quantum-drive.Tests/quantum-drive.Tests.csproj -p:Platform=x64
 ```
+
+## Contributing
+
+Please open an issue before starting significant work so we can discuss the approach. All contributions must be licensed under GPL-3.0.
+
+For security-related issues, see [SECURITY.md](SECURITY.md).
+
+## License
+
+QuantumDrive is licensed under the [GNU General Public License v3.0](LICENSE.md).
