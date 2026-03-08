@@ -29,6 +29,7 @@ jobs:
           -p:Platform=x64
           -p:GenerateAppxPackageOnBuild=false
           -p:AppxAutoIncrementPackageRevision=false
+          -p:PublishReadyToRun=false
           --no-restore
 
       - name: Test
