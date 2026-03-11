@@ -55,6 +55,7 @@ jobs:
         shell: pwsh
         run: |
           wix build installer/Product.wxs `
+            -arch x64 `
             -d AppPublishDir="${{ github.workspace }}\publish\x64\" `
             -d ProductVersion="${{ steps.version.outputs.msi }}" `
             -o "installer/QuantumDrive-Setup-x64-${{ steps.version.outputs.semver }}.msi"
