@@ -128,7 +128,7 @@ public sealed partial class SetupWizardPage : Page
         try
         {
             var registry = App.Services.GetRequiredService<IVaultRegistry>();
-            await registry.RegisterExistingVaultAsync(name, folder.Path, password, folder);
+            await registry.RegisterExistingVaultAsync(name, folder.Path, password);
 
             var nav = App.Services.GetRequiredService<INavigationService>();
             nav.NavigateTo<DashboardPage>();

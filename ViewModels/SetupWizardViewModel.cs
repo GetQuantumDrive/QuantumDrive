@@ -59,8 +59,6 @@ public partial class SetupWizardViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasAcceptedTerms;
 
-    private StorageFolder? _pickedFolder;
-
     public bool CanGetStarted => HasAcceptedTerms;
 
     public bool IsPasswordValid =>
@@ -77,7 +75,7 @@ public partial class SetupWizardViewModel : ObservableObject
         _navigationService = navigationService;
 
         // Default folder path
-        _vaultFolderPath = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+        _vaultFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
     partial void OnPasswordChanged(string value)
@@ -123,7 +121,6 @@ public partial class SetupWizardViewModel : ObservableObject
 
     public void SetVaultFolder(StorageFolder folder)
     {
-        _pickedFolder = folder;
         VaultFolderPath = folder.Path;
     }
 
@@ -138,7 +135,7 @@ public partial class SetupWizardViewModel : ObservableObject
         try
         {
             var descriptor = await _vaultRegistry.RegisterNewVaultAsync(
-                VaultName.Trim(), VaultFolderPath, Password, PasswordHint, _pickedFolder);
+                VaultName.Trim(), VaultFolderPath, Password, PasswordHint);
 
             var context = _vaultRegistry.GetContext(descriptor.Id);
             var publicKey = context?.Identity.MlKemPublicKey;

@@ -1,0 +1,49 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="QuantumDrive"
+    Manufacturer="GetQuantumDrive"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="6A3F8B2C-1D4E-4F5A-9B7C-2E8D3A6F1C90"
+    Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of QuantumDrive is already installed." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="QuantumDrive" />
+    </StandardDirectory>
+
+    <!-- Start Menu shortcut -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="QuantumDrive">
+        <Component Id="StartMenuShortcut" Guid="D4E5F6A7-B8C9-0123-DEF0-123456789003">
+          <Shortcut Id="AppStartMenuShortcut"
+                    Name="QuantumDrive"
+                    Description="Post-quantum encrypted virtual drive"
+                    Target="[INSTALLFOLDER]quantum-drive.exe"
+                    WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="CleanupStartMenuFolder"
+                        Directory="ApplicationProgramsFolder"
+                        On="uninstall" />
+          <RegistryValue Root="HKCU"
+                         Key="Software\GetQuantumDrive\QuantumDrive"
+                         Name="StartMenuShortcut"
+                         Type="integer"
+                         Value="1"
+                         KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Harvest all publish output; exclude debug symbols -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER" Source="$(var.AppPublishDir)">
+      <Files Include="**\*" />
+    </ComponentGroup>
+
+    <Feature Id="ProductFeature" Title="QuantumDrive" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Package>
+</Wix>

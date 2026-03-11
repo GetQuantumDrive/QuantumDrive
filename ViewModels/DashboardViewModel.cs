@@ -5,7 +5,6 @@ using CommunityToolkit.Mvvm.Input;
 using quantum_drive.Models;
 using quantum_drive.Services;
 using quantum_drive.Views;
-using Windows.Storage;
 
 namespace quantum_drive.ViewModels;
 
@@ -115,8 +114,7 @@ public partial class DashboardViewModel : ObservableObject
             return;
         }
 
-        if (ApplicationData.Current.LocalSettings.Values["AutoMountOnUnlock"] is true
-            && !IsDriveMounted && !IsDriveMounting)
+        if (AppSettings.AutoMountOnUnlock && !IsDriveMounted && !IsDriveMounting)
         {
             IsDriveMounted = true;
         }

@@ -100,7 +100,7 @@ public sealed partial class DashboardPage : Page
 
         try
         {
-            var descriptor = await registry.RegisterExistingVaultAsync(name, folder.Path, password, folder);
+            var descriptor = await registry.RegisterExistingVaultAsync(name, folder.Path, password);
             await ViewModel.AddVaultAsync(descriptor);
             ViewModel.ShowNotification($"Vault '{name}' added.");
         }

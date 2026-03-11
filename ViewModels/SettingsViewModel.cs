@@ -6,7 +6,6 @@ using quantum_drive.Helpers;
 using quantum_drive.Models;
 using quantum_drive.Services;
 using quantum_drive.Views;
-using Windows.Storage;
 
 namespace quantum_drive.ViewModels;
 
@@ -63,10 +62,10 @@ public partial class SettingsViewModel : ObservableObject
     // Auto-mount
     public bool IsAutoMountEnabled
     {
-        get => ApplicationData.Current.LocalSettings.Values[AutoMountKey] is true;
+        get => AppSettings.AutoMountOnUnlock;
         set
         {
-            ApplicationData.Current.LocalSettings.Values[AutoMountKey] = value;
+            AppSettings.AutoMountOnUnlock = value;
             OnPropertyChanged();
         }
     }

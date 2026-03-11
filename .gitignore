@@ -39,6 +39,11 @@ coverage/
 *.coverage
 *.coveragexml
 
+# Installer build outputs
+publish/
+installer/*.msi
+installer/*.wixpdb
+
 # MSIX / AppX packaging
 AppPackages/
 BundleArtifacts/
