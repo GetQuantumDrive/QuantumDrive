@@ -1,15 +1,11 @@
 using System.Diagnostics;
 using System.Text.Json;
 using quantum_drive.Models;
-using Windows.Storage;
-using Windows.Storage.AccessCache;
 
 namespace quantum_drive.Services;
 
 public class VaultRegistry : IVaultRegistry
 {
-    private const string SettingsKey = "RegisteredVaults";
-
     private readonly IPostQuantumCrypto _pqCrypto;
     private readonly List<VaultDescriptor> _vaults = new();
     private readonly Dictionary<string, VaultContext> _contexts = new();
@@ -27,7 +23,7 @@ public class VaultRegistry : IVaultRegistry
         LoadVaultList();
     }
 
-    public async Task<VaultDescriptor> RegisterNewVaultAsync(string name, string folderPath, string password, string? hint = null, StorageFolder? pickedFolder = null)
+    public async Task<VaultDescriptor> RegisterNewVaultAsync(string name, string folderPath, string password, string? hint = null)
     {
         var vaultDir = Path.Combine(folderPath, ".quantum_vault");
         Directory.CreateDirectory(vaultDir);
@@ -38,9 +34,6 @@ public class VaultRegistry : IVaultRegistry
             Name = name,
             FolderPath = vaultDir
         };
-
-        // Save the picked folder to FutureAccessList for permission persistence
-        SaveFutureAccessToken(descriptor, pickedFolder);
 
         var identity = new IdentityService(_pqCrypto, vaultDir);
         var crypto = new CryptoService(_pqCrypto);
@@ -61,7 +54,7 @@ public class VaultRegistry : IVaultRegistry
         return descriptor;
     }
 
-    public async Task<VaultDescriptor> RegisterExistingVaultAsync(string name, string folderPath, string password, StorageFolder? pickedFolder = null)
+    public async Task<VaultDescriptor> RegisterExistingVaultAsync(string name, string folderPath, string password)
     {
         var vaultDir = Path.Combine(folderPath, ".quantum_vault");
         if (!File.Exists(Path.Combine(vaultDir, "vault.identity")))
@@ -78,9 +71,6 @@ public class VaultRegistry : IVaultRegistry
             Name = name,
             FolderPath = vaultDir
         };
-
-        // Save the picked folder to FutureAccessList for permission persistence
-        SaveFutureAccessToken(descriptor, pickedFolder);
 
         var crypto = new CryptoService(_pqCrypto);
         var context = new VaultContext
@@ -106,17 +96,6 @@ public class VaultRegistry : IVaultRegistry
         {
             context.Dispose();
             _contexts.Remove(vaultId);
-        }
-
-        // Remove FutureAccessList token if present
-        if (!string.IsNullOrEmpty(descriptor.FutureAccessToken))
-        {
-            try
-            {
-                if (StorageApplicationPermissions.FutureAccessList.ContainsItem(descriptor.FutureAccessToken))
-                    StorageApplicationPermissions.FutureAccessList.Remove(descriptor.FutureAccessToken);
-            }
-            catch { /* best effort */ }
         }
 
         _vaults.Remove(descriptor);
@@ -185,26 +164,11 @@ public class VaultRegistry : IVaultRegistry
         return context;
     }
 
-    private static void SaveFutureAccessToken(VaultDescriptor descriptor, StorageFolder? folder)
-    {
-        if (folder is null) return;
-
-        try
-        {
-            var token = StorageApplicationPermissions.FutureAccessList.Add(folder, descriptor.Id);
-            descriptor.FutureAccessToken = token;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Failed to save FutureAccessList token: {ex.Message}");
-        }
-    }
-
     private void LoadVaultList()
     {
         _vaults.Clear();
 
-        var json = ApplicationData.Current.LocalSettings.Values[SettingsKey] as string;
+        var json = AppSettings.RegisteredVaults;
         if (string.IsNullOrEmpty(json)) return;
 
         try
@@ -221,7 +185,6 @@ public class VaultRegistry : IVaultRegistry
 
     private void SaveVaultList()
     {
-        var json = JsonSerializer.Serialize(_vaults);
-        ApplicationData.Current.LocalSettings.Values[SettingsKey] = json;
+        AppSettings.RegisteredVaults = JsonSerializer.Serialize(_vaults);
     }
 }

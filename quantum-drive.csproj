@@ -14,7 +14,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <WindowsPackageType>MSIX</WindowsPackageType>
-    <!-- Disable auto-init so the test runner can load this assembly without WinRT activation -->
+    <!-- Disable auto-init for packaged builds; test runner handles itself via ExcludeAssets -->
     <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
     <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
@@ -66,6 +66,14 @@
   -->
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Unpackaged build: used for EXE installer distribution (dotnet build -p:BuildTarget=Unpackaged) -->
+  <PropertyGroup Condition="'$(BuildTarget)'=='Unpackaged'">
+    <WindowsPackageType>None</WindowsPackageType>
+    <DefineConstants>$(DefineConstants);UNPACKAGED</DefineConstants>
+    <WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>
+    <WindowsAppSdkDeploymentManagerInitialize>true</WindowsAppSdkDeploymentManagerInitialize>
   </PropertyGroup>
 
   <!-- Publish Properties -->

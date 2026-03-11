@@ -6,9 +6,7 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
-  id-token: write  # Required by SignPath for OIDC build verification
   contents: write  # Required to create GitHub releases
-  actions: read    # Required by SignPath to read workflow artifacts
 
 jobs:
   release:
@@ -23,27 +21,17 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+      - name: Install WiX toolset
+        run: dotnet tool install --global wix
 
       - name: Get version from tag
         id: version
         shell: pwsh
         run: |
           $semver = "${{ github.ref_name }}".TrimStart('v')
-          $msix   = "$semver.0"
+          $msi    = "$semver.0"
           "semver=$semver" | Out-File $env:GITHUB_OUTPUT -Append
-          "msix=$msix"     | Out-File $env:GITHUB_OUTPUT -Append
-
-      - name: Set MSIX version in manifest
-        shell: pwsh
-        run: |
-          [xml]$m = Get-Content Package.appxmanifest
-          $m.Package.Identity.Version = "${{ steps.version.outputs.msix }}"
-          $m.Save("${{ github.workspace }}\Package.appxmanifest")
-
-      - name: Restore
-        run: dotnet restore quantum-drive.csproj
+          "msi=$msi"       | Out-File $env:GITHUB_OUTPUT -Append
 
       - name: Test
         run: >
@@ -52,7 +40,36 @@ jobs:
           -p:Platform=x64
           --verbosity normal
 
-      - name: Build x64 MSIX
+      - name: Publish unpackaged x64
+        shell: pwsh
+        run: |
+          dotnet publish quantum-drive.csproj `
+            -c Release `
+            -p:Platform=x64 `
+            -p:BuildTarget=Unpackaged `
+            -r win-x64 `
+            --self-contained false `
+            -o publish/x64
+
+      - name: Build installer (x64 MSI)
+        shell: pwsh
+        run: |
+          wix build installer/Product.wxs `
+            -d AppPublishDir="${{ github.workspace }}\publish\x64\" `
+            -d ProductVersion="${{ steps.version.outputs.msi }}" `
+            -o "installer/QuantumDrive-Setup-x64-${{ steps.version.outputs.semver }}.msi"
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set MSIX version in manifest
+        shell: pwsh
+        run: |
+          [xml]$m = Get-Content Package.appxmanifest
+          $m.Package.Identity.Version = "${{ steps.version.outputs.msi }}"
+          $m.Save("${{ github.workspace }}\Package.appxmanifest")
+
+      - name: Build x64 MSIX (for Store upload)
         shell: pwsh
         run: |
           msbuild quantum-drive.csproj `
@@ -66,7 +83,7 @@ jobs:
             /p:AppxAutoIncrementPackageRevision=false `
             "/p:AppxPackageDir=${{ github.workspace }}\AppPackages\x64\"
 
-      - name: Build ARM64 MSIX
+      - name: Build ARM64 MSIX (for Store upload)
         shell: pwsh
         run: |
           msbuild quantum-drive.csproj `
@@ -80,46 +97,6 @@ jobs:
             /p:AppxAutoIncrementPackageRevision=false `
             "/p:AppxPackageDir=${{ github.workspace }}\AppPackages\arm64\"
 
-      - name: Upload x64 MSIX for signing
-        id: upload-x64
-        uses: actions/upload-artifact@v4
-        with:
-          name: msix-x64-unsigned
-          path: AppPackages\x64\**\*.msix
-
-      - name: Upload ARM64 MSIX for signing
-        id: upload-arm64
-        uses: actions/upload-artifact@v4
-        with:
-          name: msix-arm64-unsigned
-          path: AppPackages\arm64\**\*.msix
-
-      # Sign x64 — requires manual approval in the SignPath dashboard.
-      # Configure SIGNPATH_API_TOKEN and SIGNPATH_ORGANIZATION_ID in repo secrets.
-      # Update signing-policy-slug and artifact-configuration-slug to match your
-      # SignPath project settings.
-      - name: Sign x64 via SignPath
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: msix
-          github-artifact-id: ${{ steps.upload-x64.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: signed\x64
-
-      - name: Sign ARM64 via SignPath
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: msix
-          github-artifact-id: ${{ steps.upload-arm64.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: signed\arm64
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -127,5 +104,6 @@ jobs:
           draft: true
           generate_release_notes: true
           files: |
-            signed\x64\*.msix
-            signed\arm64\*.msix
+            installer/QuantumDrive-Setup-x64-${{ steps.version.outputs.semver }}.msi
+            AppPackages/x64/**/*.msix
+            AppPackages/arm64/**/*.msix
