@@ -132,6 +132,10 @@
                             Command="{x:Bind ViewModel.NextStepCommand}"
                             IsEnabled="{x:Bind ViewModel.CanGetStarted, Mode=OneWay}"/>
 
+                    <Button Content="Cancel"
+                            HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.CancelSetupCommand}"/>
+
                     <HyperlinkButton Content="I already have a vault"
                                      HorizontalAlignment="Center"
                                      Click="ImportExistingVault_Click"/>

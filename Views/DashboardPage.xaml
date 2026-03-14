@@ -11,20 +11,52 @@
     <ScrollViewer>
         <StackPanel Padding="40,36" Spacing="28" MaxWidth="720">
 
-            <!-- Header -->
-            <Grid>
-                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
-                    <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
-                           Width="36" Height="36"/>
-                    <TextBlock Text="QuantumDrive"
-                               FontSize="24" FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-                <Button HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Command="{x:Bind ViewModel.NavigateToSettingsCommand}">
-                    <FontIcon Glyph="&#xE115;" FontSize="18"/>
-                </Button>
-            </Grid>
+            <!-- Header + Virtual Drive (combined) -->
+            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                    CornerRadius="12" Padding="24,20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                        <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
+                               Width="36" Height="36" VerticalAlignment="Center"/>
+                        <StackPanel Spacing="3" VerticalAlignment="Center">
+                            <TextBlock Text="QuantumDrive" FontSize="22" FontWeight="SemiBold"/>
+                            <Grid Height="18">
+                                <TextBlock Text="Post-quantum encrypted virtual drive"
+                                           FontSize="12" Opacity="0.5" VerticalAlignment="Center"
+                                           Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                            Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <ProgressRing IsActive="True" Width="14" Height="14"/>
+                                    <TextBlock Text="Configuring drive..." FontSize="12" Opacity="0.5" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                            <HyperlinkButton Padding="0" Height="Auto"
+                                             Command="{x:Bind ViewModel.OpenVirtualDriveCommand}"
+                                             Visibility="{x:Bind ViewModel.IsDriveMounted, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xED25;" FontSize="11"/>
+                                    <TextBlock Text="Open in Explorer" FontSize="12"/>
+                                </StackPanel>
+                            </HyperlinkButton>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.IsDriveMounted, Mode=TwoWay}"
+                                      IsEnabled="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"
+                                      VerticalAlignment="Center"/>
+                        <Button VerticalAlignment="Center"
+                                Command="{x:Bind ViewModel.NavigateToSettingsCommand}">
+                            <FontIcon Glyph="&#xE115;" FontSize="18"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
 
             <!-- Notification -->
             <TextBlock Text="{x:Bind ViewModel.NotificationMessage, Mode=OneWay}"
@@ -36,46 +68,6 @@
                     <ScalarTransition Duration="0:0:0.3"/>
                 </TextBlock.OpacityTransition>
             </TextBlock>
-
-            <!-- Virtual Drive -->
-            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
-                    CornerRadius="12" Padding="28">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="6">
-                        <TextBlock Text="{x:Bind ViewModel.DriveLabel, Mode=OneWay}"
-                                   FontSize="20" FontWeight="SemiBold"/>
-                        <Grid Height="20">
-                            <TextBlock Text="Post-quantum encrypted virtual drive"
-                                       FontSize="13" Opacity="0.5"
-                                       VerticalAlignment="Center"
-                                       Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
-                            <StackPanel Orientation="Horizontal" Spacing="8"
-                                        Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <ProgressRing IsActive="True" Width="16" Height="16"/>
-                                <TextBlock Text="Configuring drive..." FontSize="13" Opacity="0.5" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Grid>
-                        <HyperlinkButton Padding="0" Height="Auto"
-                                         Command="{x:Bind ViewModel.OpenVirtualDriveCommand}"
-                                         Visibility="{x:Bind ViewModel.IsDriveMounted, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon Glyph="&#xED25;" FontSize="12"/>
-                                <TextBlock Text="Open in Explorer" FontSize="13"/>
-                            </StackPanel>
-                        </HyperlinkButton>
-                    </StackPanel>
-
-                    <ToggleSwitch Grid.Column="1"
-                                  IsOn="{x:Bind ViewModel.IsDriveMounted, Mode=TwoWay}"
-                                  IsEnabled="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"
-                                  VerticalAlignment="Center"/>
-                </Grid>
-            </Border>
 
             <!-- Vault List -->
             <StackPanel Spacing="8">
