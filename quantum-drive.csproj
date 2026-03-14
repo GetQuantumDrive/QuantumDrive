@@ -21,6 +21,7 @@
     <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
     <DefaultLanguage>en-US</DefaultLanguage>
     <AppxAutoIncrementPackageRevision>true</AppxAutoIncrementPackageRevision>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
