@@ -1,0 +1,35 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle
+    Name="QuantumDrive"
+    Version="$(var.BundleVersion)"
+    Manufacturer="GetQuantumDrive"
+    UpgradeCode="F2A7B3C4-D5E6-4F78-9A0B-C1D2E3F45678">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        Theme="hyperlinkLicense"
+        LicenseUrl=""
+        SuppressOptionsUI="yes"
+        SuppressRepairButton="yes" />
+    </BootstrapperApplication>
+
+    <Chain>
+      <!-- Windows App Runtime 1.6 prerequisite (silent, permanent — not uninstalled with app) -->
+      <ExePackage
+        Id="WindowsAppRuntime"
+        Name="Windows App Runtime 1.6"
+        DownloadUrl="https://aka.ms/windowsappruntimeinstall-x64"
+        InstallCommand="/quiet"
+        Permanent="yes"
+        Vital="yes"
+        Cache="no" />
+
+      <MsiPackage
+        Id="QuantumDriveMsi"
+        Name="QuantumDrive"
+        SourceFile="$(var.MsiPath)"
+        Vital="yes" />
+    </Chain>
+  </Bundle>
+</Wix>
