@@ -73,8 +73,9 @@
   <PropertyGroup Condition="'$(BuildTarget)'=='Unpackaged'">
     <WindowsPackageType>None</WindowsPackageType>
     <DefineConstants>$(DefineConstants);UNPACKAGED</DefineConstants>
+    <!-- Bootstrap.Initialize() is for unpackaged apps; DeploymentManager.Initialize() requires MSIX identity -->
     <WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>
-    <WindowsAppSdkDeploymentManagerInitialize>true</WindowsAppSdkDeploymentManagerInitialize>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
   </PropertyGroup>
 
   <!-- Publish Properties -->
