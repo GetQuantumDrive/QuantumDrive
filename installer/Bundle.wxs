@@ -10,7 +10,7 @@
       <bal:WixStandardBootstrapperApplication
         Theme="hyperlinkLicense"
         LicenseUrl=""
-        LogoFile="..\Assets\Wide310x150Logo.scale-200.png"
+        LogoFile="..\Assets\Square150x150Logo.scale-200.png"
         SuppressOptionsUI="yes" />
     </BootstrapperApplication>
 

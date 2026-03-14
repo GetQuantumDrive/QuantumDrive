@@ -213,9 +213,18 @@ public class VirtualDriveService : IVirtualDriveService
         SetDriveMetadata(letter, iconPath);
         MountedDriveLetter = letter;
 
-        // Notify Explorer so it picks up our drive label and icon immediately
-        NativeMethods.SHChangeNotify(0x00000100 /* SHCNE_DRIVEADD */, 0x0005 /* SHCNF_PATHW */,
-            Marshal.StringToHGlobalUni($@"{letter}:\"), IntPtr.Zero);
+        // Notify Explorer synchronously so drive and nav pane entry appear immediately
+        var pathPtr = Marshal.StringToHGlobalUni($@"{letter}:\");
+        try
+        {
+            NativeMethods.SHChangeNotify(0x00000100 /* SHCNE_DRIVEADD */,
+                0x1005 /* SHCNF_PATHW | SHCNF_FLUSH */, pathPtr, IntPtr.Zero);
+        }
+        finally { Marshal.FreeHGlobal(pathPtr); }
+
+        // Refresh Explorer namespace so the nav pane CLSID entry appears
+        NativeMethods.SHChangeNotify(0x08000000 /* SHCNE_ASSOCCHANGED */,
+            0x1000 /* SHCNF_IDLIST | SHCNF_FLUSH */, IntPtr.Zero, IntPtr.Zero);
 
         Debug.WriteLine($"CFAPI drive mounted: {letter}: → {syncRoot}");
         return letter;
@@ -282,6 +291,18 @@ public class VirtualDriveService : IVirtualDriveService
 
         MountedDriveLetter = null;
         IsEncryptedMode = false;
+
+        // Notify Explorer the drive is gone
+        var pathPtr = Marshal.StringToHGlobalUni($@"{letter}:\");
+        try
+        {
+            NativeMethods.SHChangeNotify(0x00000080 /* SHCNE_DRIVEREMOVED */,
+                0x1005 /* SHCNF_PATHW | SHCNF_FLUSH */, pathPtr, IntPtr.Zero);
+        }
+        finally { Marshal.FreeHGlobal(pathPtr); }
+
+        NativeMethods.SHChangeNotify(0x08000000 /* SHCNE_ASSOCCHANGED */,
+            0x1000 /* SHCNF_IDLIST | SHCNF_FLUSH */, IntPtr.Zero, IntPtr.Zero);
 
         Debug.WriteLine($"CFAPI drive unmounted: {letter}:");
     }

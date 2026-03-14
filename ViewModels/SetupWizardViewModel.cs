@@ -182,6 +182,12 @@ public partial class SetupWizardViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void CancelSetup()
+    {
+        _navigationService.NavigateTo<DashboardPage>();
+    }
+
+    [RelayCommand]
     private void FinishSetup()
     {
         Debug.WriteLine("Setup complete — navigating to Dashboard.");
