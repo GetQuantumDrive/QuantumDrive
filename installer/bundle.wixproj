@@ -1,0 +1,17 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <OutputName>QuantumDrive-Setup-x64-$(ProductVersion)</OutputName>
+    <Platform>x64</Platform>
+    <!-- Prevent SDK from auto-including Product.wxs -->
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <!-- Map MSBuild properties to WiX preprocessor variables -->
+    <DefineConstants>ProductVersion=$(ProductVersion);MsiPath=$(MsiPath);WinAppRuntimeInstaller=$(WinAppRuntimeInstaller)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Bundle.wxs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Bal.wixext" Version="6.*" />
+  </ItemGroup>
+</Project>
