@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 
@@ -7,8 +6,6 @@ namespace quantum_drive.Services;
 
 public class VirtualDriveService : IVirtualDriveService
 {
-    private static readonly string[] PreferredLetters = ["Q", "Z", "Y", "X", "W", "V", "U", "T"];
-
     // Use a normal user-profile folder for the sync root — same pattern as
     // OneDrive (C:\Users\bjorn\OneDrive) and Dropbox (C:\Users\bjorn\Dropbox).
     // This avoids MSIX VFS virtualization issues: kernel APIs bypass the VFS layer.
@@ -20,7 +17,9 @@ public class VirtualDriveService : IVirtualDriveService
     private readonly Dictionary<string, CloudSyncProvider> _providers = []; // vaultId → provider
     private readonly Dictionary<string, string> _syncRootPaths = []; // vaultId → sync root folder path
 
-    public string? MountedDriveLetter { get; private set; }
+    private bool _isConnected;
+
+    public string? SyncRootPath => _isConnected ? SyncRootParent : null;
     public bool IsEncryptedMode { get; private set; }
     public event Action? FilesChanged;
 
@@ -31,25 +30,64 @@ public class VirtualDriveService : IVirtualDriveService
 
     /// <summary>
     /// Removes stale registry entries and connections left behind if the app crashed while a drive was mounted.
+    /// Also cleans up CFAPI sync root registrations that survive uninstall.
     /// </summary>
     public static void CleanupStaleEntries()
     {
-        // 1. Clean up stale WebDAV connections (from old WebDAV-based virtual drive)
+        // 0. SECURITY: Remove any plaintext files left by a crash while vaults were unlocked.
+        //    Hydrated placeholders contain decrypted data — must be purged before the user can
+        //    access them without entering a password.
+        CleanupStaleSyncRootFiles();
+
+        // 1. Unregister any QuantumDrive CFAPI sync roots left over from a crash or prior uninstall.
+        //    StorageProviderSyncRootManager registrations persist until explicitly removed.
+        CleanupStaleSyncRoots();
+
+        // 2. Clean up stale WebDAV connections (from old WebDAV-based virtual drive)
         CleanupStaleWebDavConnections();
 
-        // 2. Clean up stale subst drive mappings
+        // 3. Clean up stale subst drive mappings (from previous app versions)
         CleanupStaleSubstDrives();
 
-        // 3. Clean up stale CLSID / nav pane entries
+        // 4. Clean up stale CLSID / nav pane entries (from previous app versions)
         CleanupStaleNavPane();
     }
+
+    private static void CleanupStaleSyncRoots()
+    {
+        try
+        {
+            var roots = Windows.Storage.Provider.StorageProviderSyncRootManager.GetCurrentSyncRoots();
+            foreach (var root in roots)
+            {
+                if (!root.Id.StartsWith("QuantumDrive!", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    Windows.Storage.Provider.StorageProviderSyncRootManager.Unregister(root.Id);
+                    Debug.WriteLine($"Cleaned up stale sync root: {root.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to unregister stale sync root '{root.Id}': {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Sync root cleanup failed: {ex.Message}");
+        }
+    }
+
+    private static readonly string[] LegacyLetters = ["Q", "Z", "Y", "X", "W", "V", "U", "T"];
 
     private static void CleanupStaleWebDavConnections()
     {
         try
         {
             // Check each preferred drive letter for stale WebDAV (network) connections
-            foreach (var letter in PreferredLetters)
+            foreach (var letter in LegacyLetters)
             {
                 try
                 {
@@ -104,7 +142,7 @@ public class VirtualDriveService : IVirtualDriveService
     {
         try
         {
-            foreach (var letter in PreferredLetters)
+            foreach (var letter in LegacyLetters)
             {
                 try
                 {
@@ -132,25 +170,11 @@ public class VirtualDriveService : IVirtualDriveService
     {
         try
         {
+            const string NavPaneClsid = "{E4A3F710-7B2C-4B9A-9C6D-8F1A2B3C4D5E}";
+
             using var clsidKey = Registry.CurrentUser.OpenSubKey(
                 $@"SOFTWARE\Classes\CLSID\{NavPaneClsid}");
             if (clsidKey is null) return;
-
-            // Check if any drive is still actively mounted with our label
-            bool anyMounted = PreferredLetters.Any(l =>
-            {
-                try
-                {
-                    using var driveKey = Registry.CurrentUser.OpenSubKey(
-                        $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\DriveIcons\{l}\DefaultLabel");
-                    if (driveKey?.GetValue("")?.ToString() == "QuantumDrive")
-                        return Directory.Exists($@"{l}:\");
-                    return false;
-                }
-                catch { return false; }
-            });
-
-            if (anyMounted) return;
 
             Registry.CurrentUser.DeleteSubKeyTree(
                 $@"SOFTWARE\Classes\CLSID\{NavPaneClsid}", false);
@@ -168,16 +192,12 @@ public class VirtualDriveService : IVirtualDriveService
         }
     }
 
-    public async Task<string> MountAsync()
+    public async Task MountAsync()
     {
-        if (MountedDriveLetter is not null)
-            throw new InvalidOperationException($"Drive {MountedDriveLetter}: is already mounted by QuantumDrive.");
+        if (_isConnected)
+            throw new InvalidOperationException("QuantumDrive is already mounted.");
 
-        var letter = PreferredLetters.FirstOrDefault(l => !DriveExists(l))
-            ?? throw new InvalidOperationException("No available drive letter found.");
-
-        var syncRoot = SyncRootParent;
-        Directory.CreateDirectory(syncRoot);
+        Directory.CreateDirectory(SyncRootParent);
 
         // SECURITY: Clean up any stale plaintext files from a previous crash.
         // If the app crashed while vaults were unlocked, hydrated placeholders
@@ -191,48 +211,15 @@ public class VirtualDriveService : IVirtualDriveService
         // Create sync providers for all unlocked vaults
         await Task.Run(() => ConnectAllVaults(iconPath));
 
-        // Verify the folder actually exists on disk
-        if (!Directory.Exists(syncRoot))
-        {
-            DisconnectAllProviders();
-            throw new InvalidOperationException(
-                $"Sync root folder does not exist at expected path: {syncRoot}");
-        }
-
-        // Map drive letter to sync root parent via subst (DefineDosDevice)
-        var deviceName = $"{letter}:";
-        var mapped = NativeMethods.DefineDosDevice(0, deviceName, syncRoot);
-        if (!mapped)
-        {
-            DisconnectAllProviders();
-            throw new InvalidOperationException(
-                $"Failed to map drive {letter}: (Win32 error {Marshal.GetLastWin32Error()}).");
-        }
-
         IsEncryptedMode = true;
-        SetDriveMetadata(letter, iconPath);
-        MountedDriveLetter = letter;
+        _isConnected = true;
 
-        // Notify Explorer synchronously so drive and nav pane entry appear immediately
-        var pathPtr = Marshal.StringToHGlobalUni($@"{letter}:\");
-        try
-        {
-            NativeMethods.SHChangeNotify(0x00000100 /* SHCNE_DRIVEADD */,
-                0x1005 /* SHCNF_PATHW | SHCNF_FLUSH */, pathPtr, IntPtr.Zero);
-        }
-        finally { Marshal.FreeHGlobal(pathPtr); }
-
-        // Refresh Explorer namespace so the nav pane CLSID entry appears
-        NativeMethods.SHChangeNotify(0x08000000 /* SHCNE_ASSOCCHANGED */,
-            0x1000 /* SHCNF_IDLIST | SHCNF_FLUSH */, IntPtr.Zero, IntPtr.Zero);
-
-        Debug.WriteLine($"CFAPI drive mounted: {letter}: → {syncRoot}");
-        return letter;
+        Debug.WriteLine($"CFAPI drive mounted: {SyncRootParent}");
     }
 
     public async Task RefreshVaultsAsync()
     {
-        if (MountedDriveLetter is null)
+        if (!_isConnected)
             return;
 
         var iconPath = await EnsureDriveIconAsync();
@@ -264,54 +251,34 @@ public class VirtualDriveService : IVirtualDriveService
 
     public async Task UnmountAsync()
     {
-        await UnmountInternalAsync(force: false);
+        await UnmountInternalAsync();
     }
 
     public async Task ForceUnmountAsync()
     {
-        await UnmountInternalAsync(force: true);
+        await UnmountInternalAsync();
     }
 
-    private async Task UnmountInternalAsync(bool force)
+    private async Task UnmountInternalAsync()
     {
-        if (MountedDriveLetter is null)
+        if (!_isConnected)
             return;
-
-        var letter = MountedDriveLetter;
-        ClearDriveMetadata(letter);
 
         // Disconnect all CFAPI providers
         await Task.Run(DisconnectAllProviders);
 
-        // Remove drive mapping (DDD_REMOVE_DEFINITION = 0x2)
-        var deviceName = $"{letter}:";
-        var removed = NativeMethods.DefineDosDevice(0x2, deviceName, null);
-        if (!removed)
-            Debug.WriteLine($"DefineDosDevice remove failed for {letter}: (Win32 error {Marshal.GetLastWin32Error()})");
-
-        MountedDriveLetter = null;
+        _isConnected = false;
         IsEncryptedMode = false;
 
-        // Notify Explorer the drive is gone
-        var pathPtr = Marshal.StringToHGlobalUni($@"{letter}:\");
-        try
-        {
-            NativeMethods.SHChangeNotify(0x00000080 /* SHCNE_DRIVEREMOVED */,
-                0x1005 /* SHCNF_PATHW | SHCNF_FLUSH */, pathPtr, IntPtr.Zero);
-        }
-        finally { Marshal.FreeHGlobal(pathPtr); }
-
-        NativeMethods.SHChangeNotify(0x08000000 /* SHCNE_ASSOCCHANGED */,
-            0x1000 /* SHCNF_IDLIST | SHCNF_FLUSH */, IntPtr.Zero, IntPtr.Zero);
-
-        Debug.WriteLine($"CFAPI drive unmounted: {letter}:");
+        Debug.WriteLine("CFAPI drive unmounted.");
     }
 
     /// <summary>
     /// Removes any leftover plaintext files from sync root subfolders.
-    /// Called on mount to handle cases where the app crashed without cleanup.
+    /// Called at startup (via CleanupStaleEntries) and on mount to handle
+    /// cases where the app crashed without cleanup.
     /// </summary>
-    private void CleanupStaleSyncRootFiles()
+    private static void CleanupStaleSyncRootFiles()
     {
         try
         {
@@ -358,7 +325,9 @@ public class VirtualDriveService : IVirtualDriveService
             if (_providers.ContainsKey(vaultId))
                 continue;
 
-            var syncRootPath = Path.Combine(SyncRootParent, ctx.Descriptor.Name);
+            // Use the vault ID (not display name) as the folder name to guarantee uniqueness
+            // across vaults with the same name and to survive vault renames (F8, F9).
+            var syncRootPath = Path.Combine(SyncRootParent, ctx.Descriptor.Id);
             Directory.CreateDirectory(syncRootPath);
 
             try
@@ -427,83 +396,6 @@ public class VirtualDriveService : IVirtualDriveService
         catch (Exception ex)
         {
             Debug.WriteLine($"Failed to remove sync root folder: {ex.Message}");
-        }
-    }
-
-    private static bool DriveExists(string letter)
-    {
-        return Directory.Exists($@"{letter}:\");
-    }
-
-    // Fixed CLSID for QuantumDrive Explorer nav pane entry
-    private const string NavPaneClsid = "{E4A3F710-7B2C-4B9A-9C6D-8F1A2B3C4D5E}";
-
-    private static void SetDriveMetadata(string letter, string iconPath)
-    {
-        try
-        {
-            // Drive icon/label under This PC
-            var driveIconsPath = $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\DriveIcons\{letter}";
-            using var labelKey = Registry.CurrentUser.CreateSubKey($@"{driveIconsPath}\DefaultLabel");
-            labelKey.SetValue("", "QuantumDrive");
-            using var iconKey = Registry.CurrentUser.CreateSubKey($@"{driveIconsPath}\DefaultIcon");
-            iconKey.SetValue("", iconPath);
-
-            // Register shell namespace folder (nav pane entry)
-            var clsidPath = $@"SOFTWARE\Classes\CLSID\{NavPaneClsid}";
-            using var clsidKey = Registry.CurrentUser.CreateSubKey(clsidPath);
-            clsidKey.SetValue("", "QuantumDrive");
-            clsidKey.SetValue("System.IsPinnedToNameSpaceTree", 1, RegistryValueKind.DWord);
-            clsidKey.SetValue("SortOrderIndex", 0x42, RegistryValueKind.DWord);
-
-            using var clsidIconKey = Registry.CurrentUser.CreateSubKey($@"{clsidPath}\DefaultIcon");
-            clsidIconKey.SetValue("", iconPath);
-
-            using var inProcKey = Registry.CurrentUser.CreateSubKey($@"{clsidPath}\InProcServer32");
-            inProcKey.SetValue("", @"%SystemRoot%\System32\shell32.dll", RegistryValueKind.ExpandString);
-
-            using var instanceKey = Registry.CurrentUser.CreateSubKey($@"{clsidPath}\Instance");
-            instanceKey.SetValue("CLSID", "{0E5AAE11-A475-4c5b-AB00-C66DE400274E}");
-            using var initBagKey = Registry.CurrentUser.CreateSubKey($@"{clsidPath}\Instance\InitPropertyBag");
-            initBagKey.SetValue("Attributes", 0x11, RegistryValueKind.DWord);
-            initBagKey.SetValue("TargetFolderPath", $@"{letter}:\");
-
-            using var shellFolderKey = Registry.CurrentUser.CreateSubKey($@"{clsidPath}\ShellFolder");
-            shellFolderKey.SetValue("Attributes", unchecked((int)0xF080004D), RegistryValueKind.DWord);
-            shellFolderKey.SetValue("FolderValueFlags", 0x28, RegistryValueKind.DWord);
-
-            using var nsKey = Registry.CurrentUser.CreateSubKey(
-                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{NavPaneClsid}");
-            nsKey.SetValue("", "QuantumDrive");
-
-            using var hideKey = Registry.CurrentUser.CreateSubKey(
-                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel");
-            hideKey.SetValue(NavPaneClsid, 1, RegistryValueKind.DWord);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Failed to set drive metadata: {ex.Message}");
-        }
-    }
-
-    private static void ClearDriveMetadata(string letter)
-    {
-        try
-        {
-            Registry.CurrentUser.DeleteSubKeyTree(
-                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\DriveIcons\{letter}", false);
-            Registry.CurrentUser.DeleteSubKeyTree(
-                $@"SOFTWARE\Classes\CLSID\{NavPaneClsid}", false);
-            Registry.CurrentUser.DeleteSubKeyTree(
-                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{NavPaneClsid}", false);
-
-            using var hideKey = Registry.CurrentUser.OpenSubKey(
-                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel", true);
-            hideKey?.DeleteValue(NavPaneClsid, false);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Failed to clear drive metadata: {ex.Message}");
         }
     }
 
@@ -641,22 +533,19 @@ public class VirtualDriveService : IVirtualDriveService
 
     private static class NativeMethods
     {
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
         public static extern bool DefineDosDevice(
             int flags,
-            [MarshalAs(UnmanagedType.LPWStr)] string deviceName,
-            [MarshalAs(UnmanagedType.LPWStr)] string? targetPath);
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string deviceName,
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string? targetPath);
 
-        [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
+        [System.Runtime.InteropServices.DllImport("mpr.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
         public static extern int WNetCancelConnection2(
             string name, int flags, bool force);
 
-        [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
+        [System.Runtime.InteropServices.DllImport("mpr.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
         public static extern int WNetGetConnection(
             string localName, StringBuilder remoteName, ref int length);
-
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-        public static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
     }
 }

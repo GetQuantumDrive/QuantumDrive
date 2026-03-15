@@ -274,10 +274,6 @@ public partial class SettingsViewModel : ObservableObject
                 return;
             }
 
-            // Unmount drive if mounted
-            if (_virtualDriveService.MountedDriveLetter is not null)
-                await _virtualDriveService.UnmountAsync();
-
             // Delete encrypted vault files
             string vaultDir = SelectedVault.FolderPath;
             if (Directory.Exists(vaultDir))
@@ -286,6 +282,12 @@ public partial class SettingsViewModel : ObservableObject
             // Delete vault identity and remove from registry
             await context.Identity.DeleteVaultAsync();
             await _vaultRegistry.RemoveVaultAsync(SelectedVault.Id);
+
+            // Disconnect only the deleted vault's sync provider without disturbing others.
+            // RefreshVaultsAsync diffs the current provider set against unlocked vaults,
+            // so the removed vault's provider is disconnected and the rest remain intact.
+            if (_virtualDriveService.SyncRootPath is not null)
+                await _virtualDriveService.RefreshVaultsAsync();
 
             if (_vaultRegistry.HasAnyVault)
             {

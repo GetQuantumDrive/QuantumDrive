@@ -60,13 +60,23 @@ public partial class DashboardViewModel : ObservableObject
 
     private async Task ToggleDriveMountAsync(bool mount)
     {
+        // Guard against rapid toggles: if an operation is already in flight, revert the toggle.
+        if (IsDriveMounting)
+        {
+#pragma warning disable MVVMTK0034
+            _isDriveMounted = !mount;
+#pragma warning restore MVVMTK0034
+            OnPropertyChanged(nameof(IsDriveMounted));
+            return;
+        }
+
         IsDriveMounting = true;
         try
         {
             if (mount)
             {
-                var letter = await _virtualDriveService.MountAsync();
-                DriveLabel = $"Virtual Drive {letter}: (Encrypted)";
+                await _virtualDriveService.MountAsync();
+                DriveLabel = "Virtual Drive (Active)";
             }
             else
             {
@@ -93,22 +103,20 @@ public partial class DashboardViewModel : ObservableObject
 
     public void SyncDriveState()
     {
-        bool mounted = _virtualDriveService.MountedDriveLetter is not null;
+        bool mounted = _virtualDriveService.SyncRootPath is not null;
 #pragma warning disable MVVMTK0034
         _isDriveMounted = mounted;
 #pragma warning restore MVVMTK0034
         OnPropertyChanged(nameof(IsDriveMounted));
 
-        DriveLabel = mounted
-            ? $"Virtual Drive {_virtualDriveService.MountedDriveLetter}: (Encrypted)"
-            : "Virtual Drive";
+        DriveLabel = mounted ? "Virtual Drive (Active)" : "Virtual Drive";
     }
 
     public void TryAutoMount()
     {
         // Check service state first — if already mounted (e.g. navigated back from setup wizard),
         // just sync UI state instead of trying to mount again.
-        if (_virtualDriveService.MountedDriveLetter is not null)
+        if (_virtualDriveService.SyncRootPath is not null)
         {
             SyncDriveState();
             return;
@@ -158,7 +166,7 @@ public partial class DashboardViewModel : ObservableObject
     {
         RefreshStats();
 
-        if (_virtualDriveService.MountedDriveLetter is not null)
+        if (_virtualDriveService.SyncRootPath is not null)
         {
             try
             {
@@ -177,7 +185,7 @@ public partial class DashboardViewModel : ObservableObject
         await _vaultRegistry.RemoveVaultAsync(vaultId);
         RefreshStats();
 
-        if (_virtualDriveService.MountedDriveLetter is not null)
+        if (_virtualDriveService.SyncRootPath is not null)
         {
             try
             {
@@ -202,7 +210,7 @@ public partial class DashboardViewModel : ObservableObject
         _vaultRegistry.LockVault(vaultId);
         RefreshStats();
 
-        if (_virtualDriveService.MountedDriveLetter is not null)
+        if (_virtualDriveService.SyncRootPath is not null)
         {
             await _virtualDriveService.RefreshVaultsAsync();
             SyncDriveState();
@@ -217,7 +225,7 @@ public partial class DashboardViewModel : ObservableObject
         if (success)
         {
             RefreshStats();
-            if (_virtualDriveService.MountedDriveLetter is not null)
+            if (_virtualDriveService.SyncRootPath is not null)
             {
                 await _virtualDriveService.RefreshVaultsAsync();
                 SyncDriveState();
@@ -254,9 +262,8 @@ public partial class DashboardViewModel : ObservableObject
     [RelayCommand]
     private void OpenVirtualDrive()
     {
-        if (_virtualDriveService.MountedDriveLetter is not { } letter) return;
+        if (_virtualDriveService.SyncRootPath is not { } path) return;
 
-        var path = $"{letter}:\\";
         if (Directory.Exists(path))
         {
             Process.Start(new ProcessStartInfo

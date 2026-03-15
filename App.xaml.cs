@@ -70,7 +70,7 @@ public partial class App : Application
         try
         {
             var driveService = _services?.GetService<IVirtualDriveService>();
-            if (driveService?.MountedDriveLetter is not null)
+            if (driveService?.SyncRootPath is not null)
             {
                 // Force unmount with a timeout to avoid hanging the close
                 var unmountTask = driveService.ForceUnmountAsync();

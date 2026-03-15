@@ -29,7 +29,6 @@ public sealed class CloudSyncProvider : IDisposable
     // Prevent GC of callback delegates — must live as long as the connection
     private CF_CALLBACK? _fetchDataCallback;
     private CF_CALLBACK? _cancelFetchDataCallback;
-    private CF_CALLBACK? _fetchPlaceholdersCallback;
     private CF_CALLBACK_REGISTRATION[]? _callbackTable;
     private CF_CONNECTION_KEY _connectionKey;
     private bool _connected;
@@ -68,11 +67,12 @@ public sealed class CloudSyncProvider : IDisposable
         // Store delegates as fields to prevent GC
         _fetchDataCallback = new CF_CALLBACK(OnFetchData);
         _cancelFetchDataCallback = new CF_CALLBACK(OnCancelFetchData);
-        _fetchPlaceholdersCallback = new CF_CALLBACK(OnFetchPlaceholders);
 
+        // AlwaysFull policy: placeholders are created proactively via CfCreatePlaceholders,
+        // so we don't need a FETCH_PLACEHOLDERS callback. Registering one that returns
+        // PlaceholderCount=0 would cause Explorer to show an empty folder.
         _callbackTable =
         [
-            new() { Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_FETCH_PLACEHOLDERS, Callback = _fetchPlaceholdersCallback },
             new() { Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_FETCH_DATA, Callback = _fetchDataCallback },
             new() { Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_CANCEL_FETCH_DATA, Callback = _cancelFetchDataCallback },
             CF_CALLBACK_REGISTRATION.CF_CALLBACK_REGISTRATION_END
@@ -87,6 +87,11 @@ public sealed class CloudSyncProvider : IDisposable
 
         // Proactively create placeholders for all indexed files (AlwaysFull policy)
         CreateAllPlaceholders();
+
+        // Notify Explorer to refresh the sync root folder so newly created
+        // placeholders appear immediately without requiring a manual F5.
+        NativeMethods.SHChangeNotify(0x00000008 /* SHCNE_UPDATEDIR */,
+            0x0005 /* SHCNF_PATHW */, _syncRootPath, null);
 
         StartWatchers();
     }
@@ -266,63 +271,6 @@ public sealed class CloudSyncProvider : IDisposable
     #endregion
 
     #region CFAPI Callbacks
-
-    private void OnFetchPlaceholders(in CF_CALLBACK_INFO info, in CF_CALLBACK_PARAMETERS parameters)
-    {
-        Debug.WriteLine($"FETCH_PLACEHOLDERS callback fired: {info.NormalizedPath}");
-
-        // With AlwaysFull population policy, placeholders are created proactively
-        // in Connect(). This callback should rarely fire, but if it does we must
-        // signal completion via CfExecute to unblock the directory enumeration.
-        var opInfo = new CF_OPERATION_INFO
-        {
-            StructSize = (uint)Marshal.SizeOf<CF_OPERATION_INFO>(),
-            Type = CF_OPERATION_TYPE.CF_OPERATION_TYPE_TRANSFER_PLACEHOLDERS,
-            ConnectionKey = info.ConnectionKey,
-            TransferKey = info.TransferKey,
-            RequestKey = info.RequestKey,
-        };
-
-        try
-        {
-            // Ensure all placeholders exist on disk
-            CreateAllPlaceholders();
-
-            // Signal completion — placeholders already exist on disk via CfCreatePlaceholders,
-            // so we pass an empty array. CldFlt will enumerate from the file system.
-            var opParams = CF_OPERATION_PARAMETERS.Create(
-                new CF_OPERATION_PARAMETERS.TRANSFERPLACEHOLDERS
-                {
-                    CompletionStatus = NTStatus.STATUS_SUCCESS,
-                    PlaceholderTotalCount = _fileIndex.Count,
-                    PlaceholderArray = IntPtr.Zero,
-                    PlaceholderCount = 0,
-                    Flags = CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAGS.CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAG_NONE,
-                });
-
-            CfExecute(opInfo, ref opParams).ThrowIfFailed();
-            Debug.WriteLine($"FETCH_PLACEHOLDERS complete: signalled {_fileIndex.Count} files");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"FETCH_PLACEHOLDERS failed: {ex}");
-            // Signal failure to unblock the caller
-            try
-            {
-                var failParams = CF_OPERATION_PARAMETERS.Create(
-                    new CF_OPERATION_PARAMETERS.TRANSFERPLACEHOLDERS
-                    {
-                        CompletionStatus = NTStatus.STATUS_UNSUCCESSFUL,
-                        PlaceholderTotalCount = 0,
-                        PlaceholderArray = IntPtr.Zero,
-                        PlaceholderCount = 0,
-                        Flags = CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAGS.CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAG_NONE,
-                    });
-                CfExecute(opInfo, ref failParams);
-            }
-            catch { /* best effort */ }
-        }
-    }
 
     private void OnFetchData(in CF_CALLBACK_INFO info, in CF_CALLBACK_PARAMETERS parameters)
     {
@@ -594,7 +542,7 @@ public sealed class CloudSyncProvider : IDisposable
         DebouncedAction(newName, () => RenameSyncRootFileAsync(oldName, newName));
     }
 
-    private async Task EncryptSyncRootFileAsync(string localPath, string virtualName)
+    private async Task EncryptSyncRootFileAsync(string localPath, string virtualName, int retryCount = 0)
     {
         try
         {
@@ -663,12 +611,11 @@ public sealed class CloudSyncProvider : IDisposable
             Debug.WriteLine($"Encrypted: {virtualName} → {Path.GetFileName(qdPath)}");
             OnFilesChanged?.Invoke();
         }
-        catch (IOException ex) when (ex.HResult == unchecked((int)0x80070020)) // ERROR_SHARING_VIOLATION
+        catch (IOException ex) when (ex.HResult == unchecked((int)0x80070020) && retryCount < 3) // ERROR_SHARING_VIOLATION
         {
-            Debug.WriteLine($"File in use, will retry: {virtualName}");
-            // Re-queue with longer delay
+            Debug.WriteLine($"File in use, will retry ({retryCount + 1}/3): {virtualName}");
             await Task.Delay(1000);
-            await EncryptSyncRootFileAsync(localPath, virtualName);
+            await EncryptSyncRootFileAsync(localPath, virtualName, retryCount + 1);
         }
         catch (Exception ex)
         {
@@ -873,5 +820,11 @@ public sealed class CloudSyncProvider : IDisposable
         public required string QdFilePath { get; set; }
         public required FileMetadata Metadata { get; set; }
         public long EncryptedSize { get; set; }
+    }
+
+    private static class NativeMethods
+    {
+        [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        public static extern void SHChangeNotify(int wEventId, int uFlags, string dwItem1, string? dwItem2);
     }
 }

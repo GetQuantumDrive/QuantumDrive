@@ -2,9 +2,9 @@ namespace quantum_drive.Services;
 
 public interface IVirtualDriveService
 {
-    string? MountedDriveLetter { get; }
+    string? SyncRootPath { get; }
     bool IsEncryptedMode { get; }
-    Task<string> MountAsync();
+    Task MountAsync();
     Task UnmountAsync();
     Task ForceUnmountAsync();
     Task RefreshVaultsAsync();
