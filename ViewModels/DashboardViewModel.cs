@@ -58,11 +58,18 @@ public partial class DashboardViewModel : ObservableObject
         _licenseService = licenseService;
         _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _virtualDriveService.FilesChanged += OnDriveFilesChanged;
+        _virtualDriveService.VaultConnectFailed += OnVaultConnectFailed;
     }
 
     private void OnDriveFilesChanged()
     {
         _dispatcherQueue.TryEnqueue(RefreshStats);
+    }
+
+    private void OnVaultConnectFailed(string vaultName)
+    {
+        _dispatcherQueue.TryEnqueue(() =>
+            ShowNotification($"Failed to mount vault \"{vaultName}\".", isError: true));
     }
 
     async partial void OnIsDriveMountedChanged(bool value)
@@ -145,7 +152,11 @@ public partial class DashboardViewModel : ObservableObject
         // Try to unlock vaults using passwords cached in the Windows Credential Manager
         await _vaultRegistry.TryAutoUnlockAllAsync();
         _dispatcherQueue.TryEnqueue(RefreshStats);
-        IsDriveMounted = true;
+
+        // Only mount if at least one vault was actually unlocked — otherwise the drive
+        // would spin up empty, leaving the toggle On with no accessible files.
+        if (_vaultRegistry.UnlockedVaults.Any())
+            IsDriveMounted = true;
     }
 
     public void RefreshStats()
