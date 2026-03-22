@@ -306,8 +306,13 @@ public sealed partial class DashboardPage : Page
 
     private void OpenVaultFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not HyperlinkButton btn || btn.Tag is not string folderPath) return;
-        if (!System.IO.Directory.Exists(folderPath)) return;
+        var folderPath = sender switch
+        {
+            HyperlinkButton btn => btn.Tag as string,
+            MenuFlyoutItem item => item.Tag as string,
+            _ => null
+        };
+        if (folderPath is null || !System.IO.Directory.Exists(folderPath)) return;
 
         Process.Start(new ProcessStartInfo
         {
@@ -335,7 +340,13 @@ public sealed partial class DashboardPage : Page
 
     private async void RemoveVault_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button btn || btn.Tag is not string vaultId) return;
+        var vaultId = sender switch
+        {
+            Button btn => btn.Tag as string,
+            MenuFlyoutItem item => item.Tag as string,
+            _ => null
+        };
+        if (vaultId is null) return;
 
         var dialog = new ContentDialog
         {
