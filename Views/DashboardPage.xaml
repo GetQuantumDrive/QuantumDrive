@@ -69,20 +69,15 @@
                 </TextBlock.OpacityTransition>
             </TextBlock>
 
-            <!-- Vault List -->
+            <!-- Vault section -->
             <StackPanel Spacing="8">
+
+                <!-- Header row: "Vaults" title (multi-vault only) + Add Vault button -->
                 <Grid>
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="Vaults" FontSize="18" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                                CornerRadius="4" Padding="6,2"
-                                Visibility="{x:Bind ViewModel.ShowUpgradeBanner, Mode=OneWay,
-                                    Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBlock Text="{x:Bind ViewModel.VaultCountLabel, Mode=OneWay}"
-                                       FontSize="11" Opacity="0.7"/>
-                        </Border>
-                    </StackPanel>
+                    <TextBlock Text="Vaults" FontSize="18" FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
+                                   Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
                     <DropDownButton HorizontalAlignment="Right">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE710;" FontSize="14"/>
@@ -105,28 +100,105 @@
                     </DropDownButton>
                 </Grid>
 
-                <!-- Upgrade CTA — shown only when free-tier vault limit is reached -->
-                <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                        BorderBrush="{StaticResource QuantumVioletBrush}"
-                        BorderThickness="1" CornerRadius="8" Padding="16,10"
-                        Visibility="{x:Bind ViewModel.ShowUpgradeBanner, Mode=OneWay,
+                <!-- Single-vault hero card -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="16" Padding="28,24"
+                        Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
                             Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Free tier · 1 vault"
-                                       FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Upgrade to Pro for unlimited vaults and cloud providers."
-                                       FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+                    <StackPanel Spacing="12">
+
+                        <!-- Top row: lock icon + vault name + action area -->
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon Grid.Column="0"
+                                      Glyph="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
+                                          Converter={StaticResource BoolToLockGlyphConverter}}"
+                                      FontSize="24" VerticalAlignment="Center"
+                                      Foreground="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
+                                          Converter={StaticResource BoolToLockColorConverter}}"/>
+
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind ViewModel.SingleVault.Name, Mode=OneWay}"
+                                       FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                            <!-- Unlocked: status label + lock + overflow -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                                        VerticalAlignment="Center"
+                                        Visibility="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
+                                            Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Text="Unlocked" FontSize="13" Opacity="0.45"
+                                           VerticalAlignment="Center"/>
+                                <Button Click="DisconnectVault_Click"
+                                        Tag="{x:Bind ViewModel.SingleVault.Id, Mode=OneWay}"
+                                        ToolTipService.ToolTip="Lock vault">
+                                    <FontIcon Glyph="&#xE72E;" FontSize="14"/>
+                                </Button>
+                                <Button ToolTipService.ToolTip="More options">
+                                    <FontIcon Glyph="&#xE712;" FontSize="14"/>
+                                    <Button.Flyout>
+                                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                            <MenuFlyoutItem Text="Open Folder"
+                                                            Tag="{x:Bind ViewModel.SingleVault.FolderPath, Mode=OneWay}"
+                                                            Click="OpenVaultFolder_Click">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xED25;"/>
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Remove Vault"
+                                                            Tag="{x:Bind ViewModel.SingleVault.Id, Mode=OneWay}"
+                                                            Click="RemoveVault_Click">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE74D;"/>
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                        </MenuFlyout>
+                                    </Button.Flyout>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- Locked: Unlock button -->
+                            <Button Grid.Column="2" VerticalAlignment="Center"
+                                    Click="UnlockVault_Click"
+                                    Tag="{x:Bind ViewModel.SingleVault.Id, Mode=OneWay}"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Visibility="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
+                                        Converter={StaticResource InvertBoolToVisibilityConverter}}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE785;" FontSize="14"/>
+                                    <TextBlock Text="Unlock"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <!-- Stats + folder path row -->
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="40,0,0,0" Opacity="0.55">
+                            <TextBlock FontSize="12">
+                                <Run Text="{x:Bind ViewModel.SingleVault.FileCount, Mode=OneWay}"/>
+                                <Run Text="files · "/>
+                                <Run Text="{x:Bind ViewModel.SingleVault.SizeLabel, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock Text="·" FontSize="12"/>
+                            <HyperlinkButton Padding="0" Height="Auto"
+                                             Tag="{x:Bind ViewModel.SingleVault.FolderPath, Mode=OneWay}"
+                                             Click="OpenVaultFolder_Click"
+                                             ToolTipService.ToolTip="{x:Bind ViewModel.SingleVault.FolderPath, Mode=OneWay}">
+                                <TextBlock Text="{x:Bind ViewModel.SingleVault.FolderPath, Mode=OneWay}"
+                                           FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="320"/>
+                            </HyperlinkButton>
                         </StackPanel>
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
-                                Style="{StaticResource AccentButtonStyle}"
-                                Click="UpgradeToPro_Click">
-                            Get Pro
-                        </Button>
-                    </Grid>
+
+                    </StackPanel>
                 </Border>
 
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.VaultList}">
+                <!-- Multi-vault list -->
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.VaultList}"
+                               Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
+                                   Converter={StaticResource InvertBoolToVisibilityConverter}}">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="8"/>
                     </ItemsRepeater.Layout>
@@ -190,6 +262,7 @@
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
+
             </StackPanel>
 
             <!-- Support QuantumDrive -->

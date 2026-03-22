@@ -41,6 +41,9 @@ public partial class DashboardViewModel : ObservableObject
 
     public ObservableCollection<VaultStatusItem> VaultList { get; } = new();
 
+    public bool IsSingleVault => VaultList.Count == 1;
+    public VaultStatusItem? SingleVault => VaultList.Count == 1 ? VaultList[0] : null;
+
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
 
     public DashboardViewModel(
@@ -182,6 +185,9 @@ public partial class DashboardViewModel : ObservableObject
                 FolderPath = vault.FolderPath
             });
         }
+
+        OnPropertyChanged(nameof(IsSingleVault));
+        OnPropertyChanged(nameof(SingleVault));
     }
 
     public async Task AddVaultAsync(VaultDescriptor descriptor)
