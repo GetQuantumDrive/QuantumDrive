@@ -33,6 +33,9 @@ public partial class App : Application
         // Services
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IPostQuantumCrypto, PostQuantumCrypto>();
+        services.AddSingleton<ILicenseService, LicenseService>();
+        services.AddSingleton<WindowsHelloService>();
+        services.AddSingleton<StorageBackendRegistry>();
         services.AddSingleton<IVaultRegistry, VaultRegistry>();
         services.AddSingleton<IVirtualDriveService, VirtualDriveService>();
 
@@ -42,6 +45,12 @@ public partial class App : Application
         services.AddTransient<SettingsViewModel>();
 
         _services = services.BuildServiceProvider();
+
+        // Load license and register storage backends before UI starts
+        _services.GetRequiredService<ILicenseService>().Load();
+
+        var backendRegistry = _services.GetRequiredService<StorageBackendRegistry>();
+        backendRegistry.Register(new LocalStorageBackendFactory());
 
         _window = new MainWindow();
         CurrentWindow = _window;

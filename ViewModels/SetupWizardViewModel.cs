@@ -4,6 +4,7 @@ using Windows.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using quantum_drive.Helpers;
+using quantum_drive.Models;
 using quantum_drive.Services;
 using quantum_drive.Views;
 
@@ -161,6 +162,10 @@ public partial class SetupWizardViewModel : ObservableObject
             Debug.WriteLine($"Vault created. Fingerprint: {PublicKeyFingerprint}");
 
             CurrentStep = 2;
+        }
+        catch (VaultLimitReachedException)
+        {
+            ErrorMessage = "Free tier allows 1 vault. Upgrade to Pro for unlimited vaults.";
         }
         catch (Exception ex)
         {
