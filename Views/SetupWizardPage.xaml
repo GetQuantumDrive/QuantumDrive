@@ -88,7 +88,7 @@
                             <StackPanel Spacing="4">
                                 <TextBlock Text="&#x2713; End-to-end encryption" Foreground="{StaticResource QuantumVioletBrush}"/>
                                 <TextBlock Text="&#x2713; Post-quantum secure" Foreground="{StaticResource QuantumVioletBrush}"/>
-                                <TextBlock Text="&#x2713; Unlimited files, completely free" Foreground="{StaticResource QuantumVioletBrush}"/>
+                                <TextBlock Text="&#x2713; Unlimited files · 1 vault free" Foreground="{StaticResource QuantumVioletBrush}"/>
                                 <TextBlock Text="&#x2713; Open-source security" Foreground="{StaticResource QuantumVioletBrush}"/>
                             </StackPanel>
                         </StackPanel>

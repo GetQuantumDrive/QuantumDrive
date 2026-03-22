@@ -21,7 +21,7 @@ public sealed class CloudSyncProvider : IDisposable
     private const int DebounceDelayMs = 500;
 
     private readonly string _syncRootPath;
-    private readonly string _vaultPath;
+    private readonly IStorageBackend _storageBackend;
     private readonly ICryptoService _cryptoService;
     private readonly IIdentityService _identityService;
     private readonly ConcurrentDictionary<string, QdFileEntry> _fileIndex = new(StringComparer.OrdinalIgnoreCase);
@@ -34,7 +34,7 @@ public sealed class CloudSyncProvider : IDisposable
     private bool _connected;
 
     private FileSystemWatcher? _syncRootWatcher;
-    private FileSystemWatcher? _vaultWatcher;
+    private IDisposable? _backendWatchSubscription;
 
     // Suppress vault watcher events for files we just wrote
     private readonly ConcurrentDictionary<string, DateTime> _recentVaultWrites = new(StringComparer.OrdinalIgnoreCase);
@@ -49,11 +49,11 @@ public sealed class CloudSyncProvider : IDisposable
 
     public Action? OnFilesChanged { get; set; }
 
-    public CloudSyncProvider(string syncRootPath, string vaultPath,
+    public CloudSyncProvider(string syncRootPath, IStorageBackend storageBackend,
         ICryptoService cryptoService, IIdentityService identityService)
     {
         _syncRootPath = syncRootPath;
-        _vaultPath = vaultPath;
+        _storageBackend = storageBackend;
         _cryptoService = cryptoService;
         _identityService = identityService;
     }
@@ -161,17 +161,18 @@ public sealed class CloudSyncProvider : IDisposable
     public void RebuildIndex()
     {
         _fileIndex.Clear();
-        if (!Directory.Exists(_vaultPath)) return;
 
         var privateKey = _identityService.MlKemPrivateKey;
         if (privateKey is null) return;
 
-        foreach (var qdPath in Directory.EnumerateFiles(_vaultPath, "*.qd"))
+        var qdPaths = _storageBackend.ListFilesAsync(".qd").GetAwaiter().GetResult();
+
+        foreach (var qdPath in qdPaths)
         {
             try
             {
-                using var fs = File.OpenRead(qdPath);
-                var metadata = _cryptoService.ReadMetadataAsync(fs, privateKey)
+                using var stream = _storageBackend.OpenReadAsync(qdPath).GetAwaiter().GetResult();
+                var metadata = _cryptoService.ReadMetadataAsync(stream, privateKey)
                     .GetAwaiter().GetResult();
 
                 if (metadata is null || string.IsNullOrEmpty(metadata.OriginalName))
@@ -181,7 +182,7 @@ public sealed class CloudSyncProvider : IDisposable
                 {
                     QdFilePath = qdPath,
                     Metadata = metadata,
-                    EncryptedSize = new FileInfo(qdPath).Length
+                    EncryptedSize = stream.Length
                 };
             }
             catch (Exception ex)
@@ -330,7 +331,7 @@ public sealed class CloudSyncProvider : IDisposable
 
             // Decrypt entire file to memory (Full hydration policy = whole file)
             using var decrypted = new MemoryStream();
-            using (var qdStream = File.OpenRead(entry.QdFilePath))
+            using (var qdStream = _storageBackend.OpenReadAsync(entry.QdFilePath).GetAwaiter().GetResult())
             {
                 _cryptoService.DecryptToStreamAsync(qdStream, decrypted, privateKey)
                     .GetAwaiter().GetResult();
@@ -437,26 +438,8 @@ public sealed class CloudSyncProvider : IDisposable
             _syncRootWatcher.EnableRaisingEvents = true;
         }
 
-        // Watch vault for external .qd changes (e.g. OneDrive sync from another device)
-        if (Directory.Exists(_vaultPath))
-        {
-            _vaultWatcher = new FileSystemWatcher(_vaultPath, "*.qd")
-            {
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                IncludeSubdirectories = false,
-                EnableRaisingEvents = false,
-            };
-
-            _vaultWatcher.Created += OnVaultChanged;
-            _vaultWatcher.Changed += OnVaultChanged;
-            _vaultWatcher.Deleted += OnVaultDeleted;
-            _vaultWatcher.Error += (_, e) =>
-            {
-                Debug.WriteLine($"Vault watcher error: {e.GetException()?.Message}");
-                RebuildIndex();
-            };
-            _vaultWatcher.EnableRaisingEvents = true;
-        }
+        // Watch storage backend for external .qd changes (e.g. cloud sync from another device)
+        _backendWatchSubscription = _storageBackend.Watch(OnBackendChanged, RebuildIndex);
     }
 
     private void StopWatchers()
@@ -468,12 +451,8 @@ public sealed class CloudSyncProvider : IDisposable
             _syncRootWatcher = null;
         }
 
-        if (_vaultWatcher is not null)
-        {
-            _vaultWatcher.EnableRaisingEvents = false;
-            _vaultWatcher.Dispose();
-            _vaultWatcher = null;
-        }
+        _backendWatchSubscription?.Dispose();
+        _backendWatchSubscription = null;
 
         // Cancel all pending debounce timers
         foreach (var cts in _debounceCts.Values)
@@ -514,17 +493,10 @@ public sealed class CloudSyncProvider : IDisposable
 
         if (_fileIndex.TryRemove(fileName, out var entry))
         {
-            // Delete the corresponding .qd file
+            // Delete the corresponding .qd file via the backend (fire-and-forget)
             _recentVaultWrites[entry.QdFilePath] = DateTime.UtcNow;
-            try
-            {
-                File.Delete(entry.QdFilePath);
-                Debug.WriteLine($"Deleted .qd file: {entry.QdFilePath}");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Failed to delete .qd file: {ex.Message}");
-            }
+            _ = _storageBackend.DeleteAsync(entry.QdFilePath);
+            Debug.WriteLine($"Deleting .qd file: {Path.GetFileName(entry.QdFilePath)}");
 
             OnFilesChanged?.Invoke();
         }
@@ -583,29 +555,42 @@ public sealed class CloudSyncProvider : IDisposable
             }
             else
             {
-                qdPath = Path.Combine(_vaultPath, $"{virtualName}.qd");
+                qdPath = _storageBackend.GetQdPath(virtualName);
                 var counter = 1;
-                while (File.Exists(qdPath) && !_fileIndex.Values.Any(e => e.QdFilePath.Equals(qdPath, StringComparison.OrdinalIgnoreCase)))
+                while (await _storageBackend.ExistsAsync(qdPath) &&
+                       !_fileIndex.Values.Any(e => e.QdFilePath.Equals(qdPath, StringComparison.OrdinalIgnoreCase)))
                 {
-                    qdPath = Path.Combine(_vaultPath, $"{virtualName} ({counter}).qd");
+                    qdPath = _storageBackend.GetQdPath(virtualName, counter);
                     counter++;
                 }
             }
 
             _recentVaultWrites[qdPath] = DateTime.UtcNow;
 
-            // Encrypt the local file to the vault
-            using (var inputFs = File.OpenRead(localPath))
-            using (var outputFs = File.Create(qdPath))
+            // Encrypt to a temp file, then push to the backend
+            var tempPath = Path.GetTempFileName();
+            long encryptedSize;
+            try
             {
-                await _cryptoService.EncryptToStreamAsync(inputFs, outputFs, publicKey, metadata);
+                using (var inputFs = File.OpenRead(localPath))
+                using (var tempOut = File.Create(tempPath))
+                {
+                    await _cryptoService.EncryptToStreamAsync(inputFs, tempOut, publicKey, metadata);
+                }
+                encryptedSize = new FileInfo(tempPath).Length;
+                using var tempFs = File.OpenRead(tempPath);
+                await _storageBackend.WriteAsync(qdPath, tempFs);
+            }
+            finally
+            {
+                try { File.Delete(tempPath); } catch { }
             }
 
             _fileIndex[virtualName] = new QdFileEntry
             {
                 QdFilePath = qdPath,
                 Metadata = metadata,
-                EncryptedSize = new FileInfo(qdPath).Length
+                EncryptedSize = encryptedSize
             };
 
             Debug.WriteLine($"Encrypted: {virtualName} → {Path.GetFileName(qdPath)}");
@@ -645,26 +630,38 @@ public sealed class CloudSyncProvider : IDisposable
                 UploadedAt = entry.Metadata.UploadedAt
             };
 
-            var newQdPath = Path.Combine(_vaultPath, $"{newName}.qd");
+            var newQdPath = _storageBackend.GetQdPath(newName);
             _recentVaultWrites[newQdPath] = DateTime.UtcNow;
             _recentVaultWrites[entry.QdFilePath] = DateTime.UtcNow;
 
-            using (var source = File.OpenRead(entry.QdFilePath))
-            using (var dest = File.Create(newQdPath))
+            var tempPath = Path.GetTempFileName();
+            long encryptedSize;
+            try
             {
-                await _cryptoService.RewriteMetadataAsync(source, dest, privateKey, newMetadata);
+                using (var source = await _storageBackend.OpenReadAsync(entry.QdFilePath))
+                using (var tempOut = File.Create(tempPath))
+                {
+                    await _cryptoService.RewriteMetadataAsync(source, tempOut, privateKey, newMetadata);
+                }
+                encryptedSize = new FileInfo(tempPath).Length;
+                using var tempFs = File.OpenRead(tempPath);
+                await _storageBackend.WriteAsync(newQdPath, tempFs);
+            }
+            finally
+            {
+                try { File.Delete(tempPath); } catch { }
             }
 
             // Clean up old entry
             _fileIndex.TryRemove(oldName, out _);
             if (!entry.QdFilePath.Equals(newQdPath, StringComparison.OrdinalIgnoreCase))
-                File.Delete(entry.QdFilePath);
+                await _storageBackend.DeleteAsync(entry.QdFilePath);
 
             _fileIndex[newName] = new QdFileEntry
             {
                 QdFilePath = newQdPath,
                 Metadata = newMetadata,
-                EncryptedSize = new FileInfo(newQdPath).Length
+                EncryptedSize = encryptedSize
             };
 
             Debug.WriteLine($"Renamed .qd: {oldName} → {newName}");
@@ -678,54 +675,51 @@ public sealed class CloudSyncProvider : IDisposable
 
     #endregion
 
-    #region Vault Watcher Handlers
+    #region Backend Change Handler
 
-    private void OnVaultChanged(object sender, FileSystemEventArgs e)
+    private void OnBackendChanged(StorageBackendChangeEvent evt)
     {
-        if (string.IsNullOrEmpty(e.Name)) return;
-
-        // Suppress events from our own writes
-        if (_recentVaultWrites.TryGetValue(e.FullPath, out var writeTime) &&
+        // Suppress events triggered by our own writes
+        if (_recentVaultWrites.TryGetValue(evt.Path, out var writeTime) &&
             (DateTime.UtcNow - writeTime).TotalSeconds < 5)
-        {
             return;
-        }
 
-        Debug.WriteLine($"Vault watcher: {e.ChangeType} {e.Name}");
-        _ = UpdateIndexFromVaultAsync(e.FullPath);
-    }
+        Debug.WriteLine($"Backend: {evt.ChangeType} {Path.GetFileName(evt.Path)}");
 
-    private void OnVaultDeleted(object sender, FileSystemEventArgs e)
-    {
-        if (string.IsNullOrEmpty(e.Name)) return;
-
-        // Suppress events from our own deletes
-        if (_recentVaultWrites.TryGetValue(e.FullPath, out var writeTime) &&
-            (DateTime.UtcNow - writeTime).TotalSeconds < 5)
+        switch (evt.ChangeType)
         {
-            return;
+            case StorageChangeType.Created:
+            case StorageChangeType.Changed:
+                _ = UpdateIndexFromVaultAsync(evt.Path);
+                break;
+
+            case StorageChangeType.Deleted:
+                var toRemove = _fileIndex
+                    .Where(kvp => kvp.Value.QdFilePath.Equals(evt.Path, StringComparison.OrdinalIgnoreCase))
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var key in toRemove)
+                {
+                    _fileIndex.TryRemove(key, out _);
+                    RemovePlaceholder(key);
+                }
+                if (toRemove.Count > 0)
+                    OnFilesChanged?.Invoke();
+                break;
+
+            case StorageChangeType.Renamed when evt.OldPath is not null:
+                // Also suppress if we wrote the old path
+                if (_recentVaultWrites.TryGetValue(evt.OldPath, out var oldWriteTime) &&
+                    (DateTime.UtcNow - oldWriteTime).TotalSeconds < 5)
+                    return;
+                _ = UpdateIndexFromVaultAsync(evt.Path);
+                break;
         }
-
-        Debug.WriteLine($"Vault watcher: deleted {e.Name}");
-
-        var toRemove = _fileIndex
-            .Where(kvp => kvp.Value.QdFilePath.Equals(e.FullPath, StringComparison.OrdinalIgnoreCase))
-            .Select(kvp => kvp.Key)
-            .ToList();
-
-        foreach (var key in toRemove)
-        {
-            _fileIndex.TryRemove(key, out _);
-            RemovePlaceholder(key);
-        }
-
-        if (toRemove.Count > 0)
-            OnFilesChanged?.Invoke();
     }
 
     private async Task UpdateIndexFromVaultAsync(string qdPath)
     {
-        // Retry with delay — file may still be locked
+        // Retry with delay — file may still be locked by the writing process
         for (int attempt = 0; attempt < 4; attempt++)
         {
             await Task.Delay(attempt == 0 ? 200 : 500);
@@ -734,9 +728,8 @@ public sealed class CloudSyncProvider : IDisposable
                 var privateKey = _identityService.MlKemPrivateKey;
                 if (privateKey is null) return;
 
-                using var fs = File.OpenRead(qdPath);
-                var metadata = _cryptoService.ReadMetadataAsync(fs, privateKey)
-                    .GetAwaiter().GetResult();
+                using var stream = await _storageBackend.OpenReadAsync(qdPath);
+                var metadata = await _cryptoService.ReadMetadataAsync(stream, privateKey);
 
                 if (metadata is null || string.IsNullOrEmpty(metadata.OriginalName))
                     return;
@@ -745,7 +738,7 @@ public sealed class CloudSyncProvider : IDisposable
                 {
                     QdFilePath = qdPath,
                     Metadata = metadata,
-                    EncryptedSize = new FileInfo(qdPath).Length
+                    EncryptedSize = stream.Length
                 };
 
                 // Create placeholder if it doesn't exist yet
@@ -809,6 +802,7 @@ public sealed class CloudSyncProvider : IDisposable
         _disposed = true;
 
         Disconnect();
+        _storageBackend.Dispose();
 
         // Clean up suppression cache
         _recentVaultWrites.Clear();

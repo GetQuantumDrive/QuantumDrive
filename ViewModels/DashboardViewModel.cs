@@ -13,6 +13,7 @@ public partial class DashboardViewModel : ObservableObject
     private readonly IVaultRegistry _vaultRegistry;
     private readonly INavigationService _navigationService;
     private readonly IVirtualDriveService _virtualDriveService;
+    private readonly ILicenseService _licenseService;
 
     [ObservableProperty]
     private bool _isDriveMounted;
@@ -32,6 +33,12 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private Microsoft.UI.Xaml.Media.Brush _notificationForeground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
 
+    [ObservableProperty]
+    private string _vaultCountLabel = string.Empty;
+
+    [ObservableProperty]
+    private bool _showUpgradeBanner;
+
     public ObservableCollection<VaultStatusItem> VaultList { get; } = new();
 
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
@@ -39,11 +46,13 @@ public partial class DashboardViewModel : ObservableObject
     public DashboardViewModel(
         IVaultRegistry vaultRegistry,
         INavigationService navigationService,
-        IVirtualDriveService virtualDriveService)
+        IVirtualDriveService virtualDriveService,
+        ILicenseService licenseService)
     {
         _vaultRegistry = vaultRegistry;
         _navigationService = navigationService;
         _virtualDriveService = virtualDriveService;
+        _licenseService = licenseService;
         _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _virtualDriveService.FilesChanged += OnDriveFilesChanged;
     }
@@ -124,13 +133,26 @@ public partial class DashboardViewModel : ObservableObject
 
         if (AppSettings.AutoMountOnUnlock && !IsDriveMounted && !IsDriveMounting)
         {
-            IsDriveMounted = true;
+            _ = TryAutoUnlockAndMountAsync();
         }
+    }
+
+    private async Task TryAutoUnlockAndMountAsync()
+    {
+        // Try to unlock vaults using passwords cached in the Windows Credential Manager
+        await _vaultRegistry.TryAutoUnlockAllAsync();
+        _dispatcherQueue.TryEnqueue(RefreshStats);
+        IsDriveMounted = true;
     }
 
     public void RefreshStats()
     {
         VaultList.Clear();
+
+        bool atLimit = _vaultRegistry.IsAtVaultLimit;
+        int count = _vaultRegistry.Vaults.Count;
+        VaultCountLabel = atLimit ? $"{count} / 1 vault · Free" : string.Empty;
+        ShowUpgradeBanner = atLimit;
 
         foreach (var vault in _vaultRegistry.Vaults)
         {
