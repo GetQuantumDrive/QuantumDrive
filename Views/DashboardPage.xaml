@@ -12,11 +12,13 @@
         <StackPanel Padding="40,36" Spacing="28" MaxWidth="720">
 
             <!-- Header -->
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                    CornerRadius="12" Padding="24,20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                     <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
@@ -46,11 +48,12 @@
                     </StackPanel>
                 </StackPanel>
 
-                <Button Grid.Column="1" VerticalAlignment="Center"
-                        Command="{x:Bind ViewModel.NavigateToSettingsCommand}">
-                    <FontIcon Glyph="&#xE115;" FontSize="18"/>
-                </Button>
-            </Grid>
+                    <Button Grid.Column="1" VerticalAlignment="Center"
+                            Command="{x:Bind ViewModel.NavigateToSettingsCommand}">
+                        <FontIcon Glyph="&#xE115;" FontSize="18"/>
+                    </Button>
+                </Grid>
+            </Border>
 
             <!-- Notification -->
             <TextBlock Text="{x:Bind ViewModel.NotificationMessage, Mode=OneWay}"
@@ -66,11 +69,13 @@
             <!-- Vault section -->
             <StackPanel Spacing="12">
 
-                <!-- Header row: vault count + Add Vault -->
+                <!-- Header row: vault count (multi-vault) + Add Vault button -->
                 <Grid>
                     <TextBlock Text="{x:Bind ViewModel.VaultCountLabel, Mode=OneWay}"
-                               FontSize="12" FontWeight="SemiBold" Opacity="0.45"
-                               VerticalAlignment="Center" CharacterSpacing="50"/>
+                               FontSize="12" FontWeight="SemiBold" Opacity="0.5"
+                               CharacterSpacing="80" VerticalAlignment="Center"
+                               Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
+                                   Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
                     <DropDownButton HorizontalAlignment="Right">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE710;" FontSize="14"/>
@@ -95,48 +100,46 @@
 
                 <!-- ── Single-vault hero card ── -->
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="16" Padding="32,28"
+                        CornerRadius="16" Padding="32,36"
                         Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
                             Converter={StaticResource BoolToVisibilityConverter}}">
-                    <StackPanel Spacing="0" HorizontalAlignment="Center">
+                    <StackPanel Spacing="16">
 
-                        <!-- Colored vault icon -->
-                        <Border Width="88" Height="88" CornerRadius="22"
-                                Background="{x:Bind ViewModel.SingleVault.VaultColor, Mode=OneWay}"
-                                HorizontalAlignment="Center" Margin="0,0,0,18">
+                        <!-- Icon -->
+                        <Border Width="84" Height="84" CornerRadius="22"
+                                Background="{x:Bind ViewModel.SingleVault.IconBrush, Mode=OneWay}"
+                                HorizontalAlignment="Center">
                             <FontIcon Glyph="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
-                                         Converter={StaticResource BoolToLockGlyphConverter}}"
-                                      FontSize="36" Foreground="White"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                          Converter={StaticResource BoolToLockGlyphConverter}}"
+                                      FontSize="34" Foreground="White"
+                                      VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
 
-                        <!-- Vault name -->
-                        <TextBlock Text="{x:Bind ViewModel.SingleVault.Name, Mode=OneWay}"
-                                   FontSize="22" FontWeight="SemiBold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                        <!-- Name + stats -->
+                        <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="{x:Bind ViewModel.SingleVault.Name, Mode=OneWay}"
+                                       FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock FontSize="13" Opacity="0.5" HorizontalAlignment="Center">
+                                <Run Text="{x:Bind ViewModel.SingleVault.FileCount, Mode=OneWay}"/>
+                                <Run Text="files · "/>
+                                <Run Text="{x:Bind ViewModel.SingleVault.SizeLabel, Mode=OneWay}"/>
+                            </TextBlock>
+                        </StackPanel>
 
-                        <!-- Stats -->
-                        <TextBlock HorizontalAlignment="Center" Opacity="0.5" FontSize="13" Margin="0,0,0,28">
-                            <Run Text="{x:Bind ViewModel.SingleVault.FileCount, Mode=OneWay}"/>
-                            <Run Text=" files · "/>
-                            <Run Text="{x:Bind ViewModel.SingleVault.SizeLabel, Mode=OneWay}"/>
-                        </TextBlock>
-
-                        <!-- Locked: full-width Unlock Vault button -->
-                        <Button HorizontalAlignment="Stretch"
-                                Click="UnlockVault_Click"
+                        <!-- Locked: Unlock Vault button -->
+                        <Button Click="UnlockVault_Click"
                                 Tag="{x:Bind ViewModel.SingleVault.Id, Mode=OneWay}"
+                                Style="{StaticResource AccentButtonStyle}"
+                                HorizontalAlignment="Stretch"
                                 Visibility="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
-                                    Converter={StaticResource InvertBoolToVisibilityConverter}}"
-                                Background="{x:Bind ViewModel.SingleVault.VaultColor, Mode=OneWay}"
-                                Foreground="White" CornerRadius="10" Padding="0,14">
+                                    Converter={StaticResource InvertBoolToVisibilityConverter}}">
                             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-                                <FontIcon Glyph="&#xE785;" FontSize="16" Foreground="White"/>
-                                <TextBlock Text="Unlock Vault" FontSize="15" FontWeight="SemiBold"/>
+                                <FontIcon Glyph="&#xE785;" FontSize="14"/>
+                                <TextBlock Text="Unlock Vault"/>
                             </StackPanel>
                         </Button>
 
-                        <!-- Unlocked: actions row -->
+                        <!-- Unlocked: status + lock + overflow -->
                         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
                                     Visibility="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
                                         Converter={StaticResource BoolToVisibilityConverter}}">
@@ -192,36 +195,33 @@
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Colored icon square -->
-                                    <Border Grid.Column="0" Width="48" Height="48" CornerRadius="12"
-                                            Background="{x:Bind VaultColor}"
-                                            VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Width="50" Height="50" CornerRadius="13"
+                                            Background="{x:Bind IconBrush}" VerticalAlignment="Center">
                                         <FontIcon Glyph="{x:Bind IsUnlocked, Converter={StaticResource BoolToLockGlyphConverter}}"
-                                                  FontSize="20" Foreground="White"
-                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                  FontSize="22" Foreground="White"
+                                                  VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     </Border>
 
                                     <!-- Name + stats -->
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                         <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" FontSize="15"/>
                                         <TextBlock FontSize="12" Opacity="0.5">
                                             <Run Text="{x:Bind FileCount}"/>
-                                            <Run Text=" files · "/>
+                                            <Run Text="files · "/>
                                             <Run Text="{x:Bind SizeLabel}"/>
                                         </TextBlock>
                                     </StackPanel>
 
-                                    <!-- Actions -->
+                                    <!-- Action buttons -->
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
                                                 VerticalAlignment="Center">
                                         <!-- Locked: Unlock button with vault color -->
                                         <Button Click="UnlockVault_Click" Tag="{x:Bind Id}"
-                                                Visibility="{x:Bind IsUnlocked, Converter={StaticResource InvertBoolToVisibilityConverter}}"
-                                                Background="{x:Bind VaultColor}" Foreground="White"
-                                                CornerRadius="8" Padding="14,8"
-                                                ToolTipService.ToolTip="Unlock vault">
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Visibility="{x:Bind IsUnlocked, Converter={StaticResource InvertBoolToVisibilityConverter}}">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <FontIcon Glyph="&#xE785;" FontSize="13" Foreground="White"/>
-                                                <TextBlock Text="Unlock" FontWeight="SemiBold"/>
+                                                <FontIcon Glyph="&#xE785;" FontSize="13"/>
+                                                <TextBlock Text="Unlock"/>
                                             </StackPanel>
                                         </Button>
                                         <!-- Unlocked: lock + overflow -->
