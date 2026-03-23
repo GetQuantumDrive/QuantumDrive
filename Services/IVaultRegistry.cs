@@ -10,7 +10,13 @@ public interface IVaultRegistry
     /// <summary>True when the free-tier vault limit has been reached.</summary>
     bool IsAtVaultLimit { get; }
 
-    Task<VaultDescriptor> RegisterNewVaultAsync(string name, string folderPath, string password, string? hint = null);
+    Task<VaultDescriptor> RegisterNewVaultAsync(
+        string name,
+        string folderPath,
+        string password,
+        string? hint = null,
+        string backendId = "local",
+        Dictionary<string, string>? backendConfig = null);
     Task<VaultDescriptor> RegisterExistingVaultAsync(string name, string folderPath, string password);
     Task RemoveVaultAsync(string vaultId);
 
