@@ -3,6 +3,9 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using quantum_drive.Services;
+using quantum_drive.Services.Dropbox;
+using quantum_drive.Services.GoogleDrive;
+using quantum_drive.Services.OneDrive;
 using quantum_drive.ViewModels;
 using quantum_drive.Views;
 
@@ -51,6 +54,9 @@ public partial class App : Application
 
         var backendRegistry = _services.GetRequiredService<StorageBackendRegistry>();
         backendRegistry.Register(new LocalStorageBackendFactory());
+        backendRegistry.Register(new GoogleDriveStorageBackendFactory());
+        backendRegistry.Register(new DropboxStorageBackendFactory());
+        backendRegistry.Register(new OneDriveStorageBackendFactory());
 
         _window = new MainWindow();
         CurrentWindow = _window;

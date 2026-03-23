@@ -14,6 +14,11 @@ public partial class SetupWizardViewModel : ObservableObject
 {
     private readonly IVaultRegistry _vaultRegistry;
     private readonly INavigationService _navigationService;
+    private readonly StorageBackendRegistry _backendRegistry;
+
+    /// <summary>BackendConfig populated by <see cref="ConnectCloudAccountAsync"/>; passed to
+    /// <see cref="IVaultRegistry.RegisterNewVaultAsync"/> when the vault is created.</summary>
+    private Dictionary<string, string>? _pendingBackendConfig;
 
     [ObservableProperty]
     private int _currentStep;
@@ -60,6 +65,44 @@ public partial class SetupWizardViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasAcceptedTerms;
 
+    /// <summary>ID of the selected storage backend (e.g. "local", "google-drive").</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLocalBackend))]
+    [NotifyPropertyChangedFor(nameof(IsGoogleDriveBackend))]
+    [NotifyPropertyChangedFor(nameof(IsDropboxBackend))]
+    [NotifyPropertyChangedFor(nameof(IsOneDriveBackend))]
+    [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
+    private string _selectedBackendId = "local";
+
+    /// <summary>Display label shown below the cloud provider Connect button (e.g. "user@gmail.com").</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
+    private string _connectedAccountLabel = string.Empty;
+
+    /// <summary>True while an OAuth browser flow is in progress.</summary>
+    [ObservableProperty]
+    private bool _isAuthorizingCloud;
+
+    /// <summary>Error message shown under the Connect button when auth fails.</summary>
+    [ObservableProperty]
+    private string _cloudAuthError = string.Empty;
+
+    /// <summary>True when the local storage option is selected (vault folder picker is visible).</summary>
+    public bool IsLocalBackend => SelectedBackendId == "local";
+
+    /// <summary>True when Google Drive is the selected backend.</summary>
+    public bool IsGoogleDriveBackend => SelectedBackendId == "google-drive";
+
+    /// <summary>True when Dropbox is the selected backend.</summary>
+    public bool IsDropboxBackend => SelectedBackendId == "dropbox";
+
+    /// <summary>True when OneDrive is the selected backend.</summary>
+    public bool IsOneDriveBackend => SelectedBackendId == "onedrive";
+
+    /// <summary>True when the user may advance past the storage selection step.</summary>
+    public bool CanAdvanceFromStorageStep =>
+        IsLocalBackend || !string.IsNullOrEmpty(ConnectedAccountLabel);
+
     public bool CanGetStarted => HasAcceptedTerms;
 
     public bool IsPasswordValid =>
@@ -68,12 +111,16 @@ public partial class SetupWizardViewModel : ObservableObject
 
     public bool CanFinish => HasAcknowledgedRisk;
 
-    public int TotalSteps => 3;
+    public int TotalSteps => 4;
 
-    public SetupWizardViewModel(IVaultRegistry vaultRegistry, INavigationService navigationService)
+    public SetupWizardViewModel(
+        IVaultRegistry vaultRegistry,
+        INavigationService navigationService,
+        StorageBackendRegistry backendRegistry)
     {
         _vaultRegistry = vaultRegistry;
         _navigationService = navigationService;
+        _backendRegistry = backendRegistry;
 
         // Default folder path
         _vaultFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -106,17 +153,72 @@ public partial class SetupWizardViewModel : ObservableObject
     private void NextStep()
     {
         if (CurrentStep < TotalSteps - 1)
-        {
             CurrentStep++;
-        }
     }
 
     [RelayCommand]
     private void PreviousStep()
     {
         if (CurrentStep > 0)
-        {
             CurrentStep--;
+    }
+
+    /// <summary>
+    /// Selects a storage backend without triggering OAuth.
+    /// For cloud providers, <see cref="ConnectCloudAccountAsync"/> must be called separately.
+    /// </summary>
+    [RelayCommand]
+    private void SelectBackend(string backendId)
+    {
+        if (SelectedBackendId == backendId) return;
+        SelectedBackendId = backendId;
+        ConnectedAccountLabel = string.Empty;
+        CloudAuthError = string.Empty;
+        _pendingBackendConfig = null;
+    }
+
+    /// <summary>
+    /// Launches the OAuth authorization flow for the currently selected cloud backend,
+    /// stores the resulting config in <see cref="_pendingBackendConfig"/>, and updates
+    /// <see cref="ConnectedAccountLabel"/> with the signed-in account email.
+    /// </summary>
+    [RelayCommand]
+    private async Task ConnectCloudAccountAsync()
+    {
+        if (IsLocalBackend) return;
+
+        var factory = _backendRegistry.GetFactory(SelectedBackendId) as ICloudStorageBackendFactory;
+        if (factory is null)
+        {
+            CloudAuthError = $"Provider '{SelectedBackendId}' is not registered.";
+            return;
+        }
+
+        IsAuthorizingCloud = true;
+        CloudAuthError = string.Empty;
+        ConnectedAccountLabel = string.Empty;
+
+        try
+        {
+            var window = App.CurrentWindow
+                ?? throw new InvalidOperationException("No active window.");
+
+            _pendingBackendConfig = await factory.AuthorizeAsync(window);
+            ConnectedAccountLabel = factory.GetConnectedAccount(_pendingBackendConfig)
+                                    ?? "(connected)";
+        }
+        catch (OperationCanceledException)
+        {
+            CloudAuthError = "Authorization was cancelled.";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Cloud auth failed: {ex.Message}");
+            CloudAuthError = "Authorization failed. Please try again.";
+        }
+        finally
+        {
+            IsAuthorizingCloud = false;
         }
     }
 
@@ -135,8 +237,16 @@ public partial class SetupWizardViewModel : ObservableObject
 
         try
         {
+            // Cloud backends store their data remotely; use a local temp directory for CFAPI.
+            var folderPath = IsLocalBackend
+                ? VaultFolderPath
+                : Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "QuantumDrive", "CloudVaults", Guid.NewGuid().ToString("N")[..8]);
+
             var descriptor = await _vaultRegistry.RegisterNewVaultAsync(
-                VaultName.Trim(), VaultFolderPath, Password, PasswordHint);
+                VaultName.Trim(), folderPath, Password, PasswordHint,
+                SelectedBackendId, _pendingBackendConfig);
 
             var context = _vaultRegistry.GetContext(descriptor.Id);
             var publicKey = context?.Identity.MlKemPublicKey;
@@ -161,7 +271,7 @@ public partial class SetupWizardViewModel : ObservableObject
 
             Debug.WriteLine($"Vault created. Fingerprint: {PublicKeyFingerprint}");
 
-            CurrentStep = 2;
+            CurrentStep = 3;
         }
         catch (VaultLimitReachedException)
         {
