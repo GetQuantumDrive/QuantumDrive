@@ -26,6 +26,12 @@ internal static class AppSettings
         set { _data.AutoMountOnUnlock = value; Save(); }
     }
 
+    public static bool MinimizeToTray
+    {
+        get => _data.MinimizeToTray;
+        set { _data.MinimizeToTray = value; Save(); }
+    }
+
     private static AppSettingsData Load()
     {
         try
@@ -54,5 +60,6 @@ internal static class AppSettings
     {
         public string? RegisteredVaults { get; set; }
         public bool AutoMountOnUnlock { get; set; }
+        public bool MinimizeToTray { get; set; } = true;
     }
 }
