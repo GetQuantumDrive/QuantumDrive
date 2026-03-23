@@ -70,6 +70,17 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    // Minimize to tray
+    public bool IsMinimizeToTrayEnabled
+    {
+        get => AppSettings.MinimizeToTray;
+        set
+        {
+            AppSettings.MinimizeToTray = value;
+            OnPropertyChanged();
+        }
+    }
+
     public bool IsChangePasswordValid =>
         SelectedVault is not null
         && !string.IsNullOrEmpty(OldPassword)
