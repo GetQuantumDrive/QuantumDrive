@@ -14,6 +14,7 @@ public class VirtualDriveService : IVirtualDriveService
         "QuantumDrive");
 
     private readonly IVaultRegistry _vaultRegistry;
+    private readonly StorageBackendRegistry _backendRegistry;
     private readonly Dictionary<string, CloudSyncProvider> _providers = []; // vaultId → provider
     private readonly Dictionary<string, string> _syncRootPaths = []; // vaultId → sync root folder path
 
@@ -23,9 +24,10 @@ public class VirtualDriveService : IVirtualDriveService
     public bool IsEncryptedMode { get; private set; }
     public event Action? FilesChanged;
 
-    public VirtualDriveService(IVaultRegistry vaultRegistry)
+    public VirtualDriveService(IVaultRegistry vaultRegistry, StorageBackendRegistry backendRegistry)
     {
         _vaultRegistry = vaultRegistry;
+        _backendRegistry = backendRegistry;
     }
 
     /// <summary>
@@ -336,9 +338,13 @@ public class VirtualDriveService : IVirtualDriveService
                     vaultId, ctx.Descriptor.Name, syncRootPath, iconPath)
                     .GetAwaiter().GetResult();
 
+                var factory = _backendRegistry.GetFactory(ctx.Descriptor.BackendId)
+                              ?? _backendRegistry.GetFactory("local")!;
+                var backend = factory.CreateForVault(ctx.Descriptor);
+
                 var provider = new CloudSyncProvider(
                     syncRootPath,
-                    ctx.Descriptor.FolderPath,
+                    backend,
                     ctx.Crypto,
                     ctx.Identity);
                 provider.OnFilesChanged = () => FilesChanged?.Invoke();
