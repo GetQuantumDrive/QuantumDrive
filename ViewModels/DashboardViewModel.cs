@@ -159,14 +159,9 @@ public partial class DashboardViewModel : ObservableObject
             IsDriveMounted = true;
     }
 
-    private static readonly Windows.UI.Color[] _vaultColorPalette =
-    {
-        Microsoft.UI.ColorHelper.FromArgb(255, 121, 101, 208), // purple
-        Microsoft.UI.ColorHelper.FromArgb(255,  75, 123, 229), // blue
-        Microsoft.UI.ColorHelper.FromArgb(255,  46, 155, 110), // green
-        Microsoft.UI.ColorHelper.FromArgb(255, 229, 142,  52), // amber
-        Microsoft.UI.ColorHelper.FromArgb(255, 214,  79, 107), // rose
-    };
+    private static readonly Microsoft.UI.Xaml.Media.Brush _vaultIconBrush =
+        new Microsoft.UI.Xaml.Media.SolidColorBrush(
+            Microsoft.UI.ColorHelper.FromArgb(255, 121, 101, 208));
 
     public void RefreshStats()
     {
@@ -177,7 +172,6 @@ public partial class DashboardViewModel : ObservableObject
         VaultCountLabel = $"{count} VAULT{(count != 1 ? "S" : string.Empty)}";
         ShowUpgradeBanner = atLimit;
 
-        int colorIndex = 0;
         foreach (var vault in _vaultRegistry.Vaults)
         {
             var context = _vaultRegistry.GetContext(vault.Id);
@@ -196,7 +190,6 @@ public partial class DashboardViewModel : ObservableObject
                 catch { /* skip inaccessible */ }
             }
 
-            var iconColor = _vaultColorPalette[colorIndex % _vaultColorPalette.Length];
             VaultList.Add(new VaultStatusItem
             {
                 Id = vault.Id,
@@ -205,9 +198,8 @@ public partial class DashboardViewModel : ObservableObject
                 FileCount = fileCount,
                 SizeLabel = FormatBytes(vaultSize),
                 FolderPath = vault.FolderPath,
-                IconBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(iconColor)
+                IconBrush = _vaultIconBrush
             });
-            colorIndex++;
         }
 
         OnPropertyChanged(nameof(IsSingleVault));
