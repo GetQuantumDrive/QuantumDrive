@@ -35,7 +35,13 @@ public class VaultRegistry : IVaultRegistry
         LoadVaultList();
     }
 
-    public async Task<VaultDescriptor> RegisterNewVaultAsync(string name, string folderPath, string password, string? hint = null)
+    public async Task<VaultDescriptor> RegisterNewVaultAsync(
+        string name,
+        string folderPath,
+        string password,
+        string? hint = null,
+        string backendId = "local",
+        Dictionary<string, string>? backendConfig = null)
     {
         if (!_licenseService.IsProLicenseActive && _vaults.Count >= FreeVaultLimit)
             throw new VaultLimitReachedException(FreeVaultLimit);
@@ -47,7 +53,9 @@ public class VaultRegistry : IVaultRegistry
         {
             Id = Guid.NewGuid().ToString("N")[..8],
             Name = name,
-            FolderPath = vaultDir
+            FolderPath = vaultDir,
+            BackendId = backendId,
+            BackendConfig = backendConfig ?? [],
         };
 
         var identity = new IdentityService(_pqCrypto, vaultDir);

@@ -1,8 +1,14 @@
 using System;
 using System.Diagnostics;
+using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using quantum_drive.Services;
+using quantum_drive.Services.Dropbox;
+using quantum_drive.Services.GoogleDrive;
+using quantum_drive.Services.OneDrive;
 using quantum_drive.ViewModels;
 using quantum_drive.Views;
 
@@ -11,6 +17,7 @@ namespace quantum_drive;
 public partial class App : Application
 {
     private Window? _window;
+    private TaskbarIcon? _trayIcon;
     private static IServiceProvider? _services;
 
     public static Window? CurrentWindow { get; private set; }
@@ -51,10 +58,12 @@ public partial class App : Application
 
         var backendRegistry = _services.GetRequiredService<StorageBackendRegistry>();
         backendRegistry.Register(new LocalStorageBackendFactory());
+        backendRegistry.Register(new GoogleDriveStorageBackendFactory());
+        backendRegistry.Register(new DropboxStorageBackendFactory());
+        backendRegistry.Register(new OneDriveStorageBackendFactory());
 
         _window = new MainWindow();
         CurrentWindow = _window;
-        _window.Closed += OnWindowClosed;
         _window.Activate();
 
         // Set up navigation
@@ -72,26 +81,65 @@ public partial class App : Application
         {
             navigationService.NavigateTo<SetupWizardPage>();
         }
+
+        SetupTrayIcon();
     }
 
-    private void OnWindowClosed(object sender, WindowEventArgs args)
+    private void SetupTrayIcon()
     {
+        _trayIcon = new TaskbarIcon
+        {
+            ToolTipText = "QuantumDrive",
+            IconSource = new BitmapImage(new Uri("ms-appx:///Assets/Square44x44Logo.targetsize-24_altform-unplated.png")),
+        };
+
+        _trayIcon.TrayLeftMouseDoubleClick += (_, _) => ShowWindow();
+
+        var contextMenu = new MenuFlyout();
+
+        var openItem = new MenuFlyoutItem { Text = "Open QuantumDrive" };
+        openItem.Click += (_, _) => ShowWindow();
+        contextMenu.Items.Add(openItem);
+
+        contextMenu.Items.Add(new MenuFlyoutSeparator());
+
+        var quitItem = new MenuFlyoutItem { Text = "Quit" };
+        quitItem.Click += (_, _) => QuitApp();
+        contextMenu.Items.Add(quitItem);
+
+        _trayIcon.ContextFlyout = contextMenu;
+    }
+
+    private void ShowWindow()
+    {
+        (_window as MainWindow)?.ShowAndActivate();
+    }
+
+    private void QuitApp()
+    {
+        if (_window is MainWindow mainWindow)
+            mainWindow.IsExiting = true;
+
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+
         try
         {
             var driveService = _services?.GetService<IVirtualDriveService>();
             if (driveService?.SyncRootPath is not null)
             {
-                // Force unmount with a timeout to avoid hanging the close
                 var unmountTask = driveService.ForceUnmountAsync();
                 if (!unmountTask.Wait(TimeSpan.FromSeconds(3)))
                 {
-                    Debug.WriteLine("Unmount timed out on window close — proceeding with shutdown.");
+                    Debug.WriteLine("Unmount timed out on quit — proceeding with shutdown.");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to unmount drive on shutdown: {ex.Message}");
+            Debug.WriteLine($"Failed to unmount drive on quit: {ex.Message}");
         }
+
+        _window?.Close();
     }
 }
