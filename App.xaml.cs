@@ -1,10 +1,7 @@
 using System;
 using System.Diagnostics;
-using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
 using quantum_drive.Services;
 using quantum_drive.Services.Dropbox;
 using quantum_drive.Services.GoogleDrive;
@@ -17,7 +14,6 @@ namespace quantum_drive;
 public partial class App : Application
 {
     private Window? _window;
-    private TaskbarIcon? _trayIcon;
     private static IServiceProvider? _services;
 
     public static Window? CurrentWindow { get; private set; }
@@ -45,6 +41,7 @@ public partial class App : Application
         services.AddSingleton<StorageBackendRegistry>();
         services.AddSingleton<IVaultRegistry, VaultRegistry>();
         services.AddSingleton<IVirtualDriveService, VirtualDriveService>();
+        services.AddSingleton<TrayIconService>();
 
         // ViewModels
         services.AddTransient<SetupWizardViewModel>();
@@ -64,6 +61,11 @@ public partial class App : Application
 
         _window = new MainWindow();
         CurrentWindow = _window;
+        _window.Closed += OnWindowClosed;
+
+        var trayService = _services.GetRequiredService<TrayIconService>();
+        trayService.Initialize(_window);
+
         _window.Activate();
 
         // Set up navigation
@@ -81,47 +83,16 @@ public partial class App : Application
         {
             navigationService.NavigateTo<SetupWizardPage>();
         }
-
-        SetupTrayIcon();
     }
 
-    private void SetupTrayIcon()
+    private void OnWindowClosed(object sender, WindowEventArgs args)
     {
-        _trayIcon = new TaskbarIcon
+        var trayService = _services?.GetService<TrayIconService>();
+        if (trayService is not null && !trayService.IsReallyClosing)
         {
-            ToolTipText = "QuantumDrive",
-            IconSource = new BitmapImage(new Uri("ms-appx:///Assets/Square44x44Logo.targetsize-24_altform-unplated.png")),
-        };
-
-        _trayIcon.TrayLeftMouseDoubleClick += (_, _) => ShowWindow();
-
-        var contextMenu = new MenuFlyout();
-
-        var openItem = new MenuFlyoutItem { Text = "Open QuantumDrive" };
-        openItem.Click += (_, _) => ShowWindow();
-        contextMenu.Items.Add(openItem);
-
-        contextMenu.Items.Add(new MenuFlyoutSeparator());
-
-        var quitItem = new MenuFlyoutItem { Text = "Quit" };
-        quitItem.Click += (_, _) => QuitApp();
-        contextMenu.Items.Add(quitItem);
-
-        _trayIcon.ContextFlyout = contextMenu;
-    }
-
-    private void ShowWindow()
-    {
-        (_window as MainWindow)?.ShowAndActivate();
-    }
-
-    private void QuitApp()
-    {
-        if (_window is MainWindow mainWindow)
-            mainWindow.IsExiting = true;
-
-        _trayIcon?.Dispose();
-        _trayIcon = null;
+            // Window was hidden to tray — keep app alive, don't unmount
+            return;
+        }
 
         try
         {
@@ -139,7 +110,9 @@ public partial class App : Application
         {
             Debug.WriteLine($"Failed to unmount drive on quit: {ex.Message}");
         }
-
-        _window?.Close();
+        finally
+        {
+            trayService?.Dispose();
+        }
     }
 }

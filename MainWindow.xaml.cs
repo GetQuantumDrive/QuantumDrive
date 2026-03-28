@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using quantum_drive.Services;
 
 namespace quantum_drive;
 
@@ -23,18 +24,13 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnAppWindowClosing;
     }
 
-    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private void OnAppWindowClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
-        if (!IsExiting)
+        var tray = App.Services.GetRequiredService<TrayIconService>();
+        if (AppSettings.MinimizeToTray && !tray.IsReallyClosing)
         {
             args.Cancel = true;
-            sender.Hide();
+            AppWindow.Hide();
         }
-    }
-
-    public void ShowAndActivate()
-    {
-        AppWindow.Show(true);
-        Activate();
     }
 }
