@@ -41,17 +41,6 @@ public partial class DashboardViewModel : ObservableObject
 
     public ObservableCollection<VaultStatusItem> VaultList { get; } = new();
 
-    // Palette used to assign a stable accent color to each vault by index.
-    private static readonly Microsoft.UI.Color[] VaultPalette =
-    [
-        Microsoft.UI.ColorHelper.FromArgb(255, 124,  58, 237), // violet
-        Microsoft.UI.ColorHelper.FromArgb(255,  37,  99, 235), // blue
-        Microsoft.UI.ColorHelper.FromArgb(255,   5, 150, 105), // emerald
-        Microsoft.UI.ColorHelper.FromArgb(255, 217, 119,   6), // amber
-        Microsoft.UI.ColorHelper.FromArgb(255, 220,  38,  38), // red
-        Microsoft.UI.ColorHelper.FromArgb(255, 219,  39, 119), // pink
-    ];
-
     public bool IsSingleVault => VaultList.Count == 1;
     public VaultStatusItem? SingleVault => VaultList.Count == 1 ? VaultList[0] : null;
 
@@ -152,7 +141,7 @@ public partial class DashboardViewModel : ObservableObject
             return;
         }
 
-        if (AppSettings.AutoMountOnUnlock && !IsDriveMounted && !IsDriveMounting)
+        if (!IsDriveMounted && !IsDriveMounting)
         {
             _ = TryAutoUnlockAndMountAsync();
         }
@@ -170,16 +159,19 @@ public partial class DashboardViewModel : ObservableObject
             IsDriveMounted = true;
     }
 
+    private static readonly Microsoft.UI.Xaml.Media.Brush _vaultIconBrush =
+        new Microsoft.UI.Xaml.Media.SolidColorBrush(
+            Microsoft.UI.ColorHelper.FromArgb(255, 121, 101, 208));
+
     public void RefreshStats()
     {
         VaultList.Clear();
 
         bool atLimit = _vaultRegistry.IsAtVaultLimit;
         int count = _vaultRegistry.Vaults.Count;
-        VaultCountLabel = count == 1 ? "1 VAULT" : $"{count} VAULTS";
+        VaultCountLabel = $"{count} VAULT{(count != 1 ? "S" : string.Empty)}";
         ShowUpgradeBanner = atLimit;
 
-        int colorIndex = 0;
         foreach (var vault in _vaultRegistry.Vaults)
         {
             var context = _vaultRegistry.GetContext(vault.Id);
@@ -198,9 +190,6 @@ public partial class DashboardViewModel : ObservableObject
                 catch { /* skip inaccessible */ }
             }
 
-            var color = VaultPalette[colorIndex % VaultPalette.Length];
-            colorIndex++;
-
             VaultList.Add(new VaultStatusItem
             {
                 Id = vault.Id,
@@ -209,7 +198,7 @@ public partial class DashboardViewModel : ObservableObject
                 FileCount = fileCount,
                 SizeLabel = FormatBytes(vaultSize),
                 FolderPath = vault.FolderPath,
-                VaultColor = new Microsoft.UI.Xaml.Media.SolidColorBrush(color),
+                IconBrush = _vaultIconBrush
             });
         }
 
@@ -284,6 +273,10 @@ public partial class DashboardViewModel : ObservableObject
             {
                 await _virtualDriveService.RefreshVaultsAsync();
                 SyncDriveState();
+            }
+            else if (!IsDriveMounting)
+            {
+                IsDriveMounted = true;
             }
             ShowNotification("Vault unlocked.");
         }

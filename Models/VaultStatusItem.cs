@@ -10,6 +10,5 @@ public class VaultStatusItem
     public int FileCount { get; set; }
     public string SizeLabel { get; set; } = string.Empty;
     public string FolderPath { get; set; } = string.Empty;
-    /// <summary>Per-vault accent color used for the icon background and action buttons.</summary>
-    public SolidColorBrush VaultColor { get; set; } = new(Microsoft.UI.Colors.Gray);
+    public Microsoft.UI.Xaml.Media.Brush? IconBrush { get; set; }
 }
