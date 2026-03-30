@@ -1,4 +1,5 @@
 using System.IO;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,9 +10,6 @@ namespace quantum_drive;
 public sealed partial class MainWindow : Window
 {
     public Frame NavigationFrame => RootFrame;
-
-    /// <summary>Set to true before calling Close() to perform a real exit instead of minimizing to tray.</summary>
-    internal bool IsExiting;
 
     public MainWindow()
     {

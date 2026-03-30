@@ -1,4 +1,5 @@
 using System;
+using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -22,6 +23,7 @@ internal sealed class TrayIconService : IDisposable
             IconSource = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
                 new Uri("ms-appx:///Assets/app.ico")),
             ContextMenuMode = ContextMenuMode.PopupMenu,
+            DoubleClickCommand = new RelayCommand(ShowWindow),
         };
 
         var menu = new MenuFlyout();
@@ -43,7 +45,6 @@ internal sealed class TrayIconService : IDisposable
         menu.Items.Add(quitItem);
 
         _trayIcon.ContextFlyout = menu;
-        _trayIcon.TrayLeftMouseDoubleClick += (_, _) => ShowWindow();
 
         _trayIcon.ForceCreate(enablesEfficiencyMode: false);
     }
