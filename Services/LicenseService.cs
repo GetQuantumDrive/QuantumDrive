@@ -10,10 +10,8 @@ namespace quantum_drive.Services;
 public sealed class LicenseService : ILicenseService
 {
     // Ed25519 public key (32 bytes, base64).
-    // Replace with the actual signing key before release.
-    // Generate with: openssl genpkey -algorithm ed25519 | openssl pkey -pubout -outform DER | tail -c 32 | base64
     private static readonly byte[] PublicKey = Convert.FromBase64String(
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+        "5eDLnO7OSFBjgcHdf40QEFUpw4jokxclhdlcW94NmrY=");
 
     private static readonly string LicensePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

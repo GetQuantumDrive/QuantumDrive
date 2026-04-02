@@ -24,8 +24,13 @@ if (-not (Test-Path $bcPath)) {
 }
 Add-Type -Path $bcPath
 
-# Ed25519 private key (KEEP SECRET — never ship this with the app)
-$privateKeyBase64 = "LKxQ1pe95KHatdjMB/+w5/EfBQ8jGVMsCKUrg+OJXRk="
+# Ed25519 private key — loaded from environment variable QDPRO_SIGNING_KEY.
+# Set it before running: $env:QDPRO_SIGNING_KEY = "<base64-encoded 32-byte key>"
+$privateKeyBase64 = $env:QDPRO_SIGNING_KEY
+if ([string]::IsNullOrEmpty($privateKeyBase64)) {
+    Write-Error "QDPRO_SIGNING_KEY environment variable is not set."
+    exit 1
+}
 $privateKeyBytes = [Convert]::FromBase64String($privateKeyBase64)
 $privateKey = New-Object Org.BouncyCastle.Crypto.Parameters.Ed25519PrivateKeyParameters($privateKeyBytes, 0)
 
