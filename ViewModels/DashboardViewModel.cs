@@ -178,7 +178,12 @@ public partial class DashboardViewModel : ObservableObject
             int fileCount = 0;
             long vaultSize = 0;
 
-            if (Directory.Exists(vault.FolderPath))
+            if (context?.SyncProvider is { } provider)
+            {
+                fileCount = provider.IndexedFileCount;
+                vaultSize = provider.IndexedTotalSize;
+            }
+            else if (Directory.Exists(vault.FolderPath))
             {
                 try
                 {

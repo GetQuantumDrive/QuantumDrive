@@ -49,6 +49,9 @@ public sealed class CloudSyncProvider : IDisposable
 
     public Action? OnFilesChanged { get; set; }
 
+    public int IndexedFileCount => _fileIndex.Count;
+    public long IndexedTotalSize => _fileIndex.Values.Sum(e => e.Metadata.OriginalSize);
+
     public CloudSyncProvider(string syncRootPath, IStorageBackend storageBackend,
         ICryptoService cryptoService, IIdentityService identityService)
     {

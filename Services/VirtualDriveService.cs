@@ -241,9 +241,15 @@ public class VirtualDriveService : IVirtualDriveService
         {
             await Task.Run(() =>
             {
-                // Disconnect providers and unregister sync roots for vaults that are no longer unlocked
+                // Disconnect providers for vaults that are no longer unlocked.
+                // Only fully unregister/delete if the vault was removed from the registry —
+                // if it was merely locked we keep the sync root registered so that
+                // re-connecting in the same session doesn't hit the Windows re-registration
+                // bug (ERROR_NOT_FOUND / 0x80070490 after a rapid unregister→register cycle).
                 var unlockedIds = _vaultRegistry.UnlockedVaults
                     .Select(v => v.Descriptor.Id).ToHashSet();
+                var allVaultIds = _vaultRegistry.Vaults
+                    .Select(v => v.Id).ToHashSet();
 
                 var staleIds = _providers.Keys.Where(id => !unlockedIds.Contains(id)).ToList();
 
@@ -255,8 +261,19 @@ public class VirtualDriveService : IVirtualDriveService
                         provider.Dispose();
                         _providers.Remove(vaultId);
                     }
-                    SyncRootRegistrar.Unregister(vaultId);
-                    RemoveSyncRootFolder(vaultId);
+
+                    if (allVaultIds.Contains(vaultId))
+                    {
+                        // Vault still registered — just locked. Keep sync root alive; files
+                        // were already purged by provider.Disconnect() → CleanupSyncRootFiles().
+                        _syncRootPaths.Remove(vaultId);
+                    }
+                    else
+                    {
+                        // Vault was removed from registry — full cleanup.
+                        SyncRootRegistrar.Unregister(vaultId);
+                        RemoveSyncRootFolder(vaultId);
+                    }
                 }
 
                 // Connect providers for newly unlocked vaults
@@ -361,9 +378,12 @@ public class VirtualDriveService : IVirtualDriveService
 
             try
             {
-                SyncRootRegistrar.RegisterAsync(
-                    vaultId, ctx.Descriptor.Name, syncRootPath, iconPath)
-                    .GetAwaiter().GetResult();
+                if (!SyncRootRegistrar.IsRegistered(vaultId))
+                {
+                    SyncRootRegistrar.RegisterAsync(
+                        vaultId, ctx.Descriptor.Name, syncRootPath, iconPath)
+                        .GetAwaiter().GetResult();
+                }
 
                 var factory = _backendRegistry.GetFactory(ctx.Descriptor.BackendId)
                               ?? _backendRegistry.GetFactory("local")!;
