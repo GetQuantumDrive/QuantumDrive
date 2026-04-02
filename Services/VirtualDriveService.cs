@@ -14,18 +14,22 @@ public class VirtualDriveService : IVirtualDriveService
         "QuantumDrive");
 
     private readonly IVaultRegistry _vaultRegistry;
+    private readonly StorageBackendRegistry _backendRegistry;
     private readonly Dictionary<string, CloudSyncProvider> _providers = []; // vaultId → provider
     private readonly Dictionary<string, string> _syncRootPaths = []; // vaultId → sync root folder path
+    private readonly SemaphoreSlim _providerLock = new(1, 1); // serialises all _providers/_syncRootPaths mutations
 
     private bool _isConnected;
 
     public string? SyncRootPath => _isConnected ? SyncRootParent : null;
     public bool IsEncryptedMode { get; private set; }
     public event Action? FilesChanged;
+    public event Action<string>? VaultConnectFailed;
 
-    public VirtualDriveService(IVaultRegistry vaultRegistry)
+    public VirtualDriveService(IVaultRegistry vaultRegistry, StorageBackendRegistry backendRegistry)
     {
         _vaultRegistry = vaultRegistry;
+        _backendRegistry = backendRegistry;
     }
 
     /// <summary>
@@ -194,27 +198,35 @@ public class VirtualDriveService : IVirtualDriveService
 
     public async Task MountAsync()
     {
-        if (_isConnected)
-            throw new InvalidOperationException("QuantumDrive is already mounted.");
+        await _providerLock.WaitAsync();
+        try
+        {
+            if (_isConnected)
+                throw new InvalidOperationException("QuantumDrive is already mounted.");
 
-        Directory.CreateDirectory(SyncRootParent);
+            Directory.CreateDirectory(SyncRootParent);
 
-        // SECURITY: Clean up any stale plaintext files from a previous crash.
-        // If the app crashed while vaults were unlocked, hydrated placeholders
-        // with decrypted data may still be on disk.
-        CleanupStaleSyncRootFiles();
+            // SECURITY: Clean up any stale plaintext files from a previous crash.
+            // If the app crashed while vaults were unlocked, hydrated placeholders
+            // with decrypted data may still be on disk.
+            CleanupStaleSyncRootFiles();
 
-        // Generate icon before registration so sync roots pick it up
-        var iconPath = await EnsureDriveIconAsync();
-        Debug.WriteLine($"Drive icon: {iconPath}");
+            // Generate icon before registration so sync roots pick it up
+            var iconPath = await EnsureDriveIconAsync();
+            Debug.WriteLine($"Drive icon: {iconPath}");
 
-        // Create sync providers for all unlocked vaults
-        await Task.Run(() => ConnectAllVaults(iconPath));
+            // Create sync providers for all unlocked vaults
+            await Task.Run(() => ConnectAllVaults(iconPath));
 
-        IsEncryptedMode = true;
-        _isConnected = true;
+            IsEncryptedMode = true;
+            _isConnected = true;
 
-        Debug.WriteLine($"CFAPI drive mounted: {SyncRootParent}");
+            Debug.WriteLine($"CFAPI drive mounted: {SyncRootParent}");
+        }
+        finally
+        {
+            _providerLock.Release();
+        }
     }
 
     public async Task RefreshVaultsAsync()
@@ -224,53 +236,86 @@ public class VirtualDriveService : IVirtualDriveService
 
         var iconPath = await EnsureDriveIconAsync();
 
-        await Task.Run(() =>
+        await _providerLock.WaitAsync();
+        try
         {
-            // Disconnect providers and unregister sync roots for vaults that are no longer unlocked
-            var unlockedIds = _vaultRegistry.UnlockedVaults
-                .Select(v => v.Descriptor.Id).ToHashSet();
-
-            var staleIds = _providers.Keys.Where(id => !unlockedIds.Contains(id)).ToList();
-
-            foreach (var vaultId in staleIds)
+            await Task.Run(() =>
             {
-                if (_providers.TryGetValue(vaultId, out var provider))
-                {
-                    provider.Disconnect();
-                    provider.Dispose();
-                    _providers.Remove(vaultId);
-                }
-                SyncRootRegistrar.Unregister(vaultId);
-                RemoveSyncRootFolder(vaultId);
-            }
+                // Disconnect providers for vaults that are no longer unlocked.
+                // Only fully unregister/delete if the vault was removed from the registry —
+                // if it was merely locked we keep the sync root registered so that
+                // re-connecting in the same session doesn't hit the Windows re-registration
+                // bug (ERROR_NOT_FOUND / 0x80070490 after a rapid unregister→register cycle).
+                var unlockedIds = _vaultRegistry.UnlockedVaults
+                    .Select(v => v.Descriptor.Id).ToHashSet();
+                var allVaultIds = _vaultRegistry.Vaults
+                    .Select(v => v.Id).ToHashSet();
 
-            // Connect providers for newly unlocked vaults
-            ConnectAllVaults(iconPath);
-        });
+                var staleIds = _providers.Keys.Where(id => !unlockedIds.Contains(id)).ToList();
+
+                foreach (var vaultId in staleIds)
+                {
+                    if (_providers.TryGetValue(vaultId, out var provider))
+                    {
+                        provider.Disconnect();
+                        provider.Dispose();
+                        _providers.Remove(vaultId);
+                    }
+
+                    if (allVaultIds.Contains(vaultId))
+                    {
+                        // Vault still registered — just locked. Keep sync root alive; files
+                        // were already purged by provider.Disconnect() → CleanupSyncRootFiles().
+                        _syncRootPaths.Remove(vaultId);
+                    }
+                    else
+                    {
+                        // Vault was removed from registry — full cleanup.
+                        SyncRootRegistrar.Unregister(vaultId);
+                        RemoveSyncRootFolder(vaultId);
+                    }
+                }
+
+                // Connect providers for newly unlocked vaults
+                ConnectAllVaults(iconPath);
+            });
+        }
+        finally
+        {
+            _providerLock.Release();
+        }
     }
 
     public async Task UnmountAsync()
     {
-        await UnmountInternalAsync();
+        await UnmountInternalAsync(force: false);
     }
 
     public async Task ForceUnmountAsync()
     {
-        await UnmountInternalAsync();
+        await UnmountInternalAsync(force: true);
     }
 
-    private async Task UnmountInternalAsync()
+    private async Task UnmountInternalAsync(bool force = false)
     {
-        if (!_isConnected)
-            return;
+        await _providerLock.WaitAsync();
+        try
+        {
+            if (!_isConnected)
+                return;
 
-        // Disconnect all CFAPI providers
-        await Task.Run(DisconnectAllProviders);
+            // Disconnect all CFAPI providers
+            await Task.Run(() => DisconnectAllProviders(force));
 
-        _isConnected = false;
-        IsEncryptedMode = false;
+            _isConnected = false;
+            IsEncryptedMode = false;
 
-        Debug.WriteLine("CFAPI drive unmounted.");
+            Debug.WriteLine("CFAPI drive unmounted.");
+        }
+        finally
+        {
+            _providerLock.Release();
+        }
     }
 
     /// <summary>
@@ -292,7 +337,8 @@ public class VirtualDriveService : IVirtualDriveService
 
                 try
                 {
-                    foreach (var file in Directory.EnumerateFiles(subDir))
+                    // AllDirectories: hydration can create nested folder trees; purge everything.
+                    foreach (var file in Directory.EnumerateFiles(subDir, "*", SearchOption.AllDirectories))
                     {
                         try
                         {
@@ -332,13 +378,20 @@ public class VirtualDriveService : IVirtualDriveService
 
             try
             {
-                SyncRootRegistrar.RegisterAsync(
-                    vaultId, ctx.Descriptor.Name, syncRootPath, iconPath)
-                    .GetAwaiter().GetResult();
+                if (!SyncRootRegistrar.IsRegistered(vaultId))
+                {
+                    SyncRootRegistrar.RegisterAsync(
+                        vaultId, ctx.Descriptor.Name, syncRootPath, iconPath)
+                        .GetAwaiter().GetResult();
+                }
+
+                var factory = _backendRegistry.GetFactory(ctx.Descriptor.BackendId)
+                              ?? _backendRegistry.GetFactory("local")!;
+                var backend = factory.CreateForVault(ctx.Descriptor);
 
                 var provider = new CloudSyncProvider(
                     syncRootPath,
-                    ctx.Descriptor.FolderPath,
+                    backend,
                     ctx.Crypto,
                     ctx.Identity);
                 provider.OnFilesChanged = () => FilesChanged?.Invoke();
@@ -353,11 +406,12 @@ public class VirtualDriveService : IVirtualDriveService
             catch (Exception ex)
             {
                 Debug.WriteLine($"Failed to connect vault '{ctx.Descriptor.Name}': {ex} (HRESULT: 0x{ex.HResult:X8})");
+                VaultConnectFailed?.Invoke(ctx.Descriptor.Name);
             }
         }
     }
 
-    private void DisconnectAllProviders()
+    private void DisconnectAllProviders(bool force = false)
     {
         foreach (var (vaultId, provider) in _providers)
         {
@@ -379,6 +433,13 @@ public class VirtualDriveService : IVirtualDriveService
         // Clear provider references from vault contexts
         foreach (var ctx in _vaultRegistry.UnlockedVaults)
             ctx.SyncProvider = null;
+
+        // Force mode: nuke any CFAPI sync root registrations that survived the normal
+        // disconnect (e.g. because a process held an open handle to a placeholder file).
+        // CleanupStaleSyncRoots enumerates StorageProviderSyncRootManager and unregisters
+        // anything with our prefix, so it catches registrations that Unregister() above missed.
+        if (force)
+            CleanupStaleSyncRoots();
     }
 
     private void RemoveSyncRootFolder(string vaultId)

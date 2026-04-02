@@ -13,6 +13,7 @@ public partial class DashboardViewModel : ObservableObject
     private readonly IVaultRegistry _vaultRegistry;
     private readonly INavigationService _navigationService;
     private readonly IVirtualDriveService _virtualDriveService;
+    private readonly ILicenseService _licenseService;
 
     [ObservableProperty]
     private bool _isDriveMounted;
@@ -32,25 +33,43 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private Microsoft.UI.Xaml.Media.Brush _notificationForeground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
 
+    [ObservableProperty]
+    private string _vaultCountLabel = string.Empty;
+
+    [ObservableProperty]
+    private bool _showUpgradeBanner;
+
     public ObservableCollection<VaultStatusItem> VaultList { get; } = new();
+
+    public bool IsSingleVault => VaultList.Count == 1;
+    public VaultStatusItem? SingleVault => VaultList.Count == 1 ? VaultList[0] : null;
 
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
 
     public DashboardViewModel(
         IVaultRegistry vaultRegistry,
         INavigationService navigationService,
-        IVirtualDriveService virtualDriveService)
+        IVirtualDriveService virtualDriveService,
+        ILicenseService licenseService)
     {
         _vaultRegistry = vaultRegistry;
         _navigationService = navigationService;
         _virtualDriveService = virtualDriveService;
+        _licenseService = licenseService;
         _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _virtualDriveService.FilesChanged += OnDriveFilesChanged;
+        _virtualDriveService.VaultConnectFailed += OnVaultConnectFailed;
     }
 
     private void OnDriveFilesChanged()
     {
         _dispatcherQueue.TryEnqueue(RefreshStats);
+    }
+
+    private void OnVaultConnectFailed(string vaultName)
+    {
+        _dispatcherQueue.TryEnqueue(() =>
+            ShowNotification($"Failed to mount vault \"{vaultName}\".", isError: true));
     }
 
     async partial void OnIsDriveMountedChanged(bool value)
@@ -122,15 +141,36 @@ public partial class DashboardViewModel : ObservableObject
             return;
         }
 
-        if (AppSettings.AutoMountOnUnlock && !IsDriveMounted && !IsDriveMounting)
+        if (!IsDriveMounted && !IsDriveMounting)
         {
-            IsDriveMounted = true;
+            _ = TryAutoUnlockAndMountAsync();
         }
     }
+
+    private async Task TryAutoUnlockAndMountAsync()
+    {
+        // Try to unlock vaults using passwords cached in the Windows Credential Manager
+        await _vaultRegistry.TryAutoUnlockAllAsync();
+        _dispatcherQueue.TryEnqueue(RefreshStats);
+
+        // Only mount if at least one vault was actually unlocked — otherwise the drive
+        // would spin up empty, leaving the toggle On with no accessible files.
+        if (_vaultRegistry.UnlockedVaults.Any())
+            IsDriveMounted = true;
+    }
+
+    private static readonly Microsoft.UI.Xaml.Media.Brush _vaultIconBrush =
+        new Microsoft.UI.Xaml.Media.SolidColorBrush(
+            Microsoft.UI.ColorHelper.FromArgb(255, 121, 101, 208));
 
     public void RefreshStats()
     {
         VaultList.Clear();
+
+        bool atLimit = _vaultRegistry.IsAtVaultLimit;
+        int count = _vaultRegistry.Vaults.Count;
+        VaultCountLabel = $"{count} VAULT{(count != 1 ? "S" : string.Empty)}";
+        ShowUpgradeBanner = atLimit;
 
         foreach (var vault in _vaultRegistry.Vaults)
         {
@@ -138,7 +178,12 @@ public partial class DashboardViewModel : ObservableObject
             int fileCount = 0;
             long vaultSize = 0;
 
-            if (Directory.Exists(vault.FolderPath))
+            if (context?.SyncProvider is { } provider)
+            {
+                fileCount = provider.IndexedFileCount;
+                vaultSize = provider.IndexedTotalSize;
+            }
+            else if (Directory.Exists(vault.FolderPath))
             {
                 try
                 {
@@ -157,9 +202,13 @@ public partial class DashboardViewModel : ObservableObject
                 IsUnlocked = context?.IsUnlocked ?? false,
                 FileCount = fileCount,
                 SizeLabel = FormatBytes(vaultSize),
-                FolderPath = vault.FolderPath
+                FolderPath = vault.FolderPath,
+                IconBrush = _vaultIconBrush
             });
         }
+
+        OnPropertyChanged(nameof(IsSingleVault));
+        OnPropertyChanged(nameof(SingleVault));
     }
 
     public async Task AddVaultAsync(VaultDescriptor descriptor)
@@ -229,6 +278,10 @@ public partial class DashboardViewModel : ObservableObject
             {
                 await _virtualDriveService.RefreshVaultsAsync();
                 SyncDriveState();
+            }
+            else if (!IsDriveMounting)
+            {
+                IsDriveMounted = true;
             }
             ShowNotification("Vault unlocked.");
         }

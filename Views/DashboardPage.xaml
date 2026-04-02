@@ -9,9 +9,9 @@
     Background="Transparent">
 
     <ScrollViewer>
-        <StackPanel Padding="40,36" Spacing="28" MaxWidth="720">
+        <StackPanel Padding="40,36" Spacing="28" MaxWidth="720" HorizontalAlignment="Center">
 
-            <!-- Header + Virtual Drive (combined) -->
+            <!-- Header -->
             <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
                     CornerRadius="12" Padding="24,20">
                 <Grid>
@@ -20,41 +20,38 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
-                        <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
-                               Width="36" Height="36" VerticalAlignment="Center"/>
-                        <StackPanel Spacing="3" VerticalAlignment="Center">
-                            <TextBlock Text="QuantumDrive" FontSize="22" FontWeight="SemiBold"/>
-                            <Grid Height="18">
-                                <TextBlock Text="Post-quantum encrypted virtual drive"
-                                           FontSize="12" Opacity="0.5" VerticalAlignment="Center"
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
+                           Width="32" Height="32" VerticalAlignment="Center"/>
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="QuantumDrive" FontSize="20" FontWeight="SemiBold"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Grid Height="16">
+                                <TextBlock Text="Post-quantum encrypted drive"
+                                           FontSize="11" Opacity="0.45" VerticalAlignment="Center"
                                            Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
-                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                <StackPanel Orientation="Horizontal" Spacing="6"
                                             Visibility="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <ProgressRing IsActive="True" Width="14" Height="14"/>
-                                    <TextBlock Text="Configuring drive..." FontSize="12" Opacity="0.5" VerticalAlignment="Center"/>
+                                    <ProgressRing IsActive="True" Width="12" Height="12"/>
+                                    <TextBlock Text="Configuring drive…" FontSize="11" Opacity="0.45" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
                             <HyperlinkButton Padding="0" Height="Auto"
                                              Command="{x:Bind ViewModel.OpenVirtualDriveCommand}"
                                              Visibility="{x:Bind ViewModel.IsDriveMounted, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xED25;" FontSize="11"/>
-                                    <TextBlock Text="Open in Explorer" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <FontIcon Glyph="&#xED25;" FontSize="10"/>
+                                    <TextBlock Text="Open in Explorer" FontSize="11"/>
                                 </StackPanel>
                             </HyperlinkButton>
                         </StackPanel>
                     </StackPanel>
+                </StackPanel>
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <ToggleSwitch IsOn="{x:Bind ViewModel.IsDriveMounted, Mode=TwoWay}"
-                                      IsEnabled="{x:Bind ViewModel.IsDriveMounting, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"
-                                      VerticalAlignment="Center"/>
-                        <Button VerticalAlignment="Center"
-                                Command="{x:Bind ViewModel.NavigateToSettingsCommand}">
-                            <FontIcon Glyph="&#xE115;" FontSize="18"/>
-                        </Button>
-                    </StackPanel>
+                    <Button Grid.Column="1" VerticalAlignment="Center"
+                            Command="{x:Bind ViewModel.NavigateToSettingsCommand}">
+                        <FontIcon Glyph="&#xE115;" FontSize="18"/>
+                    </Button>
                 </Grid>
             </Border>
 
@@ -69,11 +66,16 @@
                 </TextBlock.OpacityTransition>
             </TextBlock>
 
-            <!-- Vault List -->
-            <StackPanel Spacing="8">
+            <!-- Vault section -->
+            <StackPanel Spacing="12">
+
+                <!-- Header row: vault count (multi-vault) + Add Vault button -->
                 <Grid>
-                    <TextBlock Text="Vaults" FontSize="18" FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{x:Bind ViewModel.VaultCountLabel, Mode=OneWay}"
+                               FontSize="12" FontWeight="SemiBold" Opacity="0.5"
+                               CharacterSpacing="80" VerticalAlignment="Center"
+                               Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
+                                   Converter={StaticResource InvertBoolToVisibilityConverter}}"/>
                     <DropDownButton HorizontalAlignment="Right">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE710;" FontSize="14"/>
@@ -96,63 +98,159 @@
                     </DropDownButton>
                 </Grid>
 
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.VaultList}">
+                <!-- ── Single-vault hero card ── -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="16" Padding="32,36"
+                        Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
+                            Converter={StaticResource BoolToVisibilityConverter}}">
+                    <StackPanel Spacing="16">
+
+                        <!-- Icon -->
+                        <Border Width="84" Height="84" CornerRadius="22"
+                                Background="{x:Bind ViewModel.SingleVault.IconBrush, Mode=OneWay}"
+                                HorizontalAlignment="Center">
+                            <FontIcon Glyph="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
+                                          Converter={StaticResource BoolToLockGlyphConverter}}"
+                                      FontSize="34" Foreground="White"
+                                      VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+
+                        <!-- Name + stats -->
+                        <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="{x:Bind ViewModel.SingleVault.Name, Mode=OneWay}"
+                                       FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock FontSize="13" Opacity="0.5" HorizontalAlignment="Center">
+                                <Run Text="{x:Bind ViewModel.SingleVault.FileCount, Mode=OneWay}"/>
+                                <Run Text="files · "/>
+                                <Run Text="{x:Bind ViewModel.SingleVault.SizeLabel, Mode=OneWay}"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Locked: Unlock Vault button -->
+                        <Button Click="UnlockVault_Click"
+                                Tag="{x:Bind ViewModel.SingleVault.Id, Mode=OneWay}"
+                                Style="{StaticResource AccentButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Visibility="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
+                                    Converter={StaticResource InvertBoolToVisibilityConverter}}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                <FontIcon Glyph="&#xE785;" FontSize="14"/>
+                                <TextBlock Text="Unlock Vault"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Unlocked: status + lock + overflow -->
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                                    Visibility="{x:Bind ViewModel.SingleVault.IsUnlocked, Mode=OneWay,
+                                        Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="Unlocked" FontSize="13" Opacity="0.45" VerticalAlignment="Center"/>
+                            <Button Click="DisconnectVault_Click"
+                                    Tag="{x:Bind ViewModel.SingleVault.Id, Mode=OneWay}"
+                                    ToolTipService.ToolTip="Lock vault">
+                                <FontIcon Glyph="&#xE72E;" FontSize="14"/>
+                            </Button>
+                            <Button ToolTipService.ToolTip="More options">
+                                <FontIcon Glyph="&#xE712;" FontSize="14"/>
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuFlyoutItem Text="Open Folder"
+                                                        Tag="{x:Bind ViewModel.SingleVault.FolderPath, Mode=OneWay}"
+                                                        Click="OpenVaultFolder_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xED25;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem Text="Remove Vault"
+                                                        Tag="{x:Bind ViewModel.SingleVault.Id, Mode=OneWay}"
+                                                        Click="RemoveVault_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE74D;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Multi-vault list ── -->
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.VaultList}"
+                               Visibility="{x:Bind ViewModel.IsSingleVault, Mode=OneWay,
+                                   Converter={StaticResource InvertBoolToVisibilityConverter}}">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="8"/>
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="models:VaultStatusItem">
                             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                    CornerRadius="10" Padding="20"
+                                    CornerRadius="12" Padding="16,14"
                                     Tapped="VaultCard_Tapped">
-                                <Grid>
+                                <Grid ColumnSpacing="14">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <FontIcon Grid.Column="0" Glyph="{x:Bind IsUnlocked, Converter={StaticResource BoolToLockGlyphConverter}}"
-                                              FontSize="24" VerticalAlignment="Center" Margin="0,0,16,0"
-                                              Foreground="{x:Bind IsUnlocked, Converter={StaticResource BoolToLockColorConverter}}"/>
+                                    <!-- Colored icon square -->
+                                    <Border Grid.Column="0" Width="50" Height="50" CornerRadius="13"
+                                            Background="{x:Bind IconBrush}" VerticalAlignment="Center">
+                                        <FontIcon Glyph="{x:Bind IsUnlocked, Converter={StaticResource BoolToLockGlyphConverter}}"
+                                                  FontSize="22" Foreground="White"
+                                                  VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    </Border>
 
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"
-                                                Opacity="{x:Bind IsUnlocked, Converter={StaticResource BoolToOpacityConverter}}">
+                                    <!-- Name + stats -->
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                         <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" FontSize="15"/>
                                         <TextBlock FontSize="12" Opacity="0.5">
                                             <Run Text="{x:Bind FileCount}"/>
-                                            <Run Text="files"/>
-                                            <Run Text=" · "/>
+                                            <Run Text="files · "/>
                                             <Run Text="{x:Bind SizeLabel}"/>
                                         </TextBlock>
-                                        <HyperlinkButton Padding="0" Height="Auto"
-                                                         Tag="{x:Bind FolderPath}"
-                                                         Click="OpenVaultFolder_Click"
-                                                         ToolTipService.ToolTip="{x:Bind FolderPath}">
-                                            <TextBlock Text="{x:Bind FolderPath}" FontSize="11" Opacity="0.4"
-                                                       TextTrimming="CharacterEllipsis" MaxWidth="300"/>
-                                        </HyperlinkButton>
                                     </StackPanel>
 
+                                    <!-- Action buttons -->
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
                                                 VerticalAlignment="Center">
+                                        <!-- Locked: Unlock button with vault color -->
                                         <Button Click="UnlockVault_Click" Tag="{x:Bind Id}"
                                                 Style="{StaticResource AccentButtonStyle}"
-                                                Visibility="{x:Bind IsUnlocked, Converter={StaticResource InvertBoolToVisibilityConverter}}"
-                                                ToolTipService.ToolTip="Unlock vault">
+                                                Visibility="{x:Bind IsUnlocked, Converter={StaticResource InvertBoolToVisibilityConverter}}">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <FontIcon Glyph="&#xE785;" FontSize="14"/>
+                                                <FontIcon Glyph="&#xE785;" FontSize="13"/>
                                                 <TextBlock Text="Unlock"/>
                                             </StackPanel>
                                         </Button>
+                                        <!-- Unlocked: lock + overflow -->
                                         <Button Click="DisconnectVault_Click" Tag="{x:Bind Id}"
                                                 Visibility="{x:Bind IsUnlocked, Converter={StaticResource BoolToVisibilityConverter}}"
                                                 ToolTipService.ToolTip="Lock vault">
                                             <FontIcon Glyph="&#xE72E;" FontSize="14"/>
                                         </Button>
-                                        <Button Click="RemoveVault_Click" Tag="{x:Bind Id}"
-                                                ToolTipService.ToolTip="Remove vault from list">
-                                            <FontIcon Glyph="&#xE74D;" FontSize="14"/>
+                                        <Button Visibility="{x:Bind IsUnlocked, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                ToolTipService.ToolTip="More options">
+                                            <FontIcon Glyph="&#xE712;" FontSize="14"/>
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuFlyoutItem Text="Open Folder"
+                                                                    Tag="{x:Bind FolderPath}"
+                                                                    Click="OpenVaultFolder_Click">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xED25;"/>
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutItem Text="Remove Vault"
+                                                                    Tag="{x:Bind Id}"
+                                                                    Click="RemoveVault_Click">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE74D;"/>
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                </MenuFlyout>
+                                            </Button.Flyout>
                                         </Button>
                                     </StackPanel>
                                 </Grid>
@@ -160,15 +258,17 @@
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
+
             </StackPanel>
 
             <!-- Support QuantumDrive -->
             <HyperlinkButton Command="{x:Bind ViewModel.OpenDonatePageCommand}"
-                             Padding="0" HorizontalAlignment="Center" Opacity="0.45">
+                             Padding="0" HorizontalAlignment="Center" Opacity="0.4">
                 <TextBlock FontSize="12">
-                    QuantumDrive is free. &#x2615; Support development &#x2192;
+                    QuantumDrive is free. Support development &#x2192;
                 </TextBlock>
             </HyperlinkButton>
+
         </StackPanel>
     </ScrollViewer>
 </Page>

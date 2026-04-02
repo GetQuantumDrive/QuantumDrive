@@ -9,4 +9,7 @@ public interface IVirtualDriveService
     Task ForceUnmountAsync();
     Task RefreshVaultsAsync();
     event Action? FilesChanged;
+
+    /// <summary>Fired when an individual vault fails to connect during mount or refresh.</summary>
+    event Action<string>? VaultConnectFailed; // vault display name
 }
