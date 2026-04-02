@@ -9,6 +9,8 @@ using quantum_drive.ViewModels;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
+// ReSharper disable AsyncVoidMethod
+
 namespace quantum_drive.Views;
 
 public sealed partial class DashboardPage : Page
@@ -28,8 +30,15 @@ public sealed partial class DashboardPage : Page
         ViewModel.TryAutoMount();
     }
 
-    private void CreateNewVault_Click(object sender, RoutedEventArgs e)
+    private async void CreateNewVault_Click(object sender, RoutedEventArgs e)
     {
+        var registry = App.Services.GetRequiredService<IVaultRegistry>();
+        if (registry.IsAtVaultLimit)
+        {
+            await ShowVaultLimitDialogAsync();
+            return;
+        }
+
         var nav = App.Services.GetRequiredService<INavigationService>();
         nav.NavigateTo<SetupWizardPage>();
     }
@@ -104,6 +113,10 @@ public sealed partial class DashboardPage : Page
             await ViewModel.AddVaultAsync(descriptor);
             ViewModel.ShowNotification($"Vault '{name}' added.");
         }
+        catch (VaultLimitReachedException)
+        {
+            await ShowVaultLimitDialogAsync();
+        }
         catch (UnauthorizedAccessException)
         {
             ViewModel.ShowNotification("Invalid password for this vault.", isError: true);
@@ -112,6 +125,29 @@ public sealed partial class DashboardPage : Page
         {
             Debug.WriteLine($"Failed to add existing vault: {ex.Message}");
             ViewModel.ShowNotification("Failed to add vault.", isError: true);
+        }
+    }
+
+    private async Task ShowVaultLimitDialogAsync()
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Upgrade to Pro",
+            Content = "The free tier allows 1 vault. Upgrade to Pro for unlimited vaults and all cloud providers.",
+            PrimaryButtonText = "Get Pro",
+            CloseButtonText = "Not now",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://quantumdrive.app/pro",
+                UseShellExecute = true
+            });
         }
     }
 
@@ -270,8 +306,13 @@ public sealed partial class DashboardPage : Page
 
     private void OpenVaultFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not HyperlinkButton btn || btn.Tag is not string folderPath) return;
-        if (!System.IO.Directory.Exists(folderPath)) return;
+        var folderPath = sender switch
+        {
+            HyperlinkButton btn => btn.Tag as string,
+            MenuFlyoutItem item => item.Tag as string,
+            _ => null
+        };
+        if (folderPath is null || !System.IO.Directory.Exists(folderPath)) return;
 
         Process.Start(new ProcessStartInfo
         {
@@ -288,9 +329,24 @@ public sealed partial class DashboardPage : Page
         await ViewModel.LockVaultAsync(vaultId);
     }
 
+    private void UpgradeToPro_Click(object sender, RoutedEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "https://quantumdrive.app/pro",
+            UseShellExecute = true
+        });
+    }
+
     private async void RemoveVault_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button btn || btn.Tag is not string vaultId) return;
+        var vaultId = sender switch
+        {
+            Button btn => btn.Tag as string,
+            MenuFlyoutItem item => item.Tag as string,
+            _ => null
+        };
+        if (vaultId is null) return;
 
         var dialog = new ContentDialog
         {

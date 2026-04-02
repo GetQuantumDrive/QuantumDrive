@@ -1,3 +1,5 @@
+using Microsoft.UI.Xaml.Media;
+
 namespace quantum_drive.Models;
 
 public class VaultStatusItem
@@ -8,4 +10,5 @@ public class VaultStatusItem
     public int FileCount { get; set; }
     public string SizeLabel { get; set; } = string.Empty;
     public string FolderPath { get; set; } = string.Empty;
+    public Microsoft.UI.Xaml.Media.Brush? IconBrush { get; set; }
 }

@@ -42,21 +42,41 @@
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="10" Padding="24">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                <StackPanel Spacing="16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="Auto-mount drive on unlock" FontWeight="SemiBold"/>
-                        <TextBlock Text="Automatically mount the virtual drive after logging in"
-                                   FontSize="13" Opacity="0.5" TextWrapping="Wrap"/>
-                    </StackPanel>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="Auto-mount drive on unlock" FontWeight="SemiBold"/>
+                            <TextBlock Text="Automatically mount the virtual drive after logging in"
+                                       FontSize="13" Opacity="0.5" TextWrapping="Wrap"/>
+                        </StackPanel>
 
-                    <ToggleSwitch Grid.Column="1" VerticalAlignment="Center"
-                                  IsOn="{x:Bind ViewModel.IsAutoMountEnabled, Mode=TwoWay}"/>
-                </Grid>
+                        <ToggleSwitch Grid.Column="1" VerticalAlignment="Center"
+                                      IsOn="{x:Bind ViewModel.IsAutoMountEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="Minimize to tray" FontWeight="SemiBold"/>
+                            <TextBlock Text="Keep QuantumDrive running in the notification area when the window is closed"
+                                       FontSize="13" Opacity="0.5" TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <ToggleSwitch Grid.Column="1" VerticalAlignment="Center"
+                                      IsOn="{x:Bind ViewModel.IsMinimizeToTrayEnabled, Mode=TwoWay}"/>
+                    </Grid>
+                </StackPanel>
             </Border>
 
             <!-- ═══════ Section 2: Account ═══════ -->

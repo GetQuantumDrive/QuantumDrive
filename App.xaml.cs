@@ -3,6 +3,9 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using quantum_drive.Services;
+using quantum_drive.Services.Dropbox;
+using quantum_drive.Services.GoogleDrive;
+using quantum_drive.Services.OneDrive;
 using quantum_drive.ViewModels;
 using quantum_drive.Views;
 
@@ -33,8 +36,12 @@ public partial class App : Application
         // Services
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IPostQuantumCrypto, PostQuantumCrypto>();
+        services.AddSingleton<ILicenseService, LicenseService>();
+        services.AddSingleton<WindowsHelloService>();
+        services.AddSingleton<StorageBackendRegistry>();
         services.AddSingleton<IVaultRegistry, VaultRegistry>();
         services.AddSingleton<IVirtualDriveService, VirtualDriveService>();
+        services.AddSingleton<TrayIconService>();
 
         // ViewModels
         services.AddTransient<SetupWizardViewModel>();
@@ -43,9 +50,22 @@ public partial class App : Application
 
         _services = services.BuildServiceProvider();
 
+        // Load license and register storage backends before UI starts
+        _services.GetRequiredService<ILicenseService>().Load();
+
+        var backendRegistry = _services.GetRequiredService<StorageBackendRegistry>();
+        backendRegistry.Register(new LocalStorageBackendFactory());
+        backendRegistry.Register(new GoogleDriveStorageBackendFactory());
+        backendRegistry.Register(new DropboxStorageBackendFactory());
+        backendRegistry.Register(new OneDriveStorageBackendFactory());
+
         _window = new MainWindow();
         CurrentWindow = _window;
         _window.Closed += OnWindowClosed;
+
+        var trayService = _services.GetRequiredService<TrayIconService>();
+        trayService.Initialize(_window);
+
         _window.Activate();
 
         // Set up navigation
@@ -67,22 +87,32 @@ public partial class App : Application
 
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
+        var trayService = _services?.GetService<TrayIconService>();
+        if (trayService is not null && !trayService.IsReallyClosing)
+        {
+            // Window was hidden to tray — keep app alive, don't unmount
+            return;
+        }
+
         try
         {
             var driveService = _services?.GetService<IVirtualDriveService>();
             if (driveService?.SyncRootPath is not null)
             {
-                // Force unmount with a timeout to avoid hanging the close
                 var unmountTask = driveService.ForceUnmountAsync();
                 if (!unmountTask.Wait(TimeSpan.FromSeconds(3)))
                 {
-                    Debug.WriteLine("Unmount timed out on window close — proceeding with shutdown.");
+                    Debug.WriteLine("Unmount timed out on quit — proceeding with shutdown.");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to unmount drive on shutdown: {ex.Message}");
+            Debug.WriteLine($"Failed to unmount drive on quit: {ex.Message}");
+        }
+        finally
+        {
+            trayService?.Dispose();
         }
     }
 }
