@@ -9,7 +9,7 @@
     Background="Transparent">
 
     <ScrollViewer>
-        <StackPanel Padding="40,36" Spacing="28" MaxWidth="720">
+        <StackPanel Padding="40,36" Spacing="28" MaxWidth="720" HorizontalAlignment="Center">
 
             <!-- Header -->
             <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"

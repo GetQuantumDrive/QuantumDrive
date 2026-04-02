@@ -31,7 +31,7 @@ public static class SyncRootRegistrar
             ShowSiblingsAsGroup = false,
             HardlinkPolicy = StorageProviderHardlinkPolicy.None,
             HydrationPolicy = StorageProviderHydrationPolicy.Full,
-            HydrationPolicyModifier = StorageProviderHydrationPolicyModifier.AutoDehydrationAllowed,
+            HydrationPolicyModifier = StorageProviderHydrationPolicyModifier.None,
             PopulationPolicy = StorageProviderPopulationPolicy.AlwaysFull,
             InSyncPolicy =
                 StorageProviderInSyncPolicy.FileCreationTime |
