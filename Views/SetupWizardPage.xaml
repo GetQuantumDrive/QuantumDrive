@@ -235,12 +235,12 @@
                             </Border>
                         </Button>
 
-                        <!-- OneDrive -->
+                        <!-- pCloud -->
                         <Button Grid.Row="1" Grid.Column="1"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                 Padding="0" Background="Transparent" BorderThickness="0"
                                 Command="{x:Bind ViewModel.SelectBackendCommand}"
-                                CommandParameter="onedrive">
+                                CommandParameter="pcloud">
                             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1" CornerRadius="8" Padding="16">
@@ -250,10 +250,10 @@
                                         <FontIcon Glyph="&#xE73E;" FontSize="14"
                                                   Foreground="{StaticResource QuantumVioletBrush}"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                  Visibility="{x:Bind ViewModel.IsOneDriveBackend, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                  Visibility="{x:Bind ViewModel.IsPCloudBackend, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                     </Grid>
-                                    <TextBlock Text="OneDrive" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Sync to OneDrive" FontSize="11" Opacity="0.7"
+                                    <TextBlock Text="pCloud" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Sync to pCloud" FontSize="11" Opacity="0.7"
                                                TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
                                 </StackPanel>
                             </Border>

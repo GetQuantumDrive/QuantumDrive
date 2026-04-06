@@ -70,7 +70,7 @@ public partial class SetupWizardViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsLocalBackend))]
     [NotifyPropertyChangedFor(nameof(IsGoogleDriveBackend))]
     [NotifyPropertyChangedFor(nameof(IsDropboxBackend))]
-    [NotifyPropertyChangedFor(nameof(IsOneDriveBackend))]
+    [NotifyPropertyChangedFor(nameof(IsPCloudBackend))]
     [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
     private string _selectedBackendId = "local";
 
@@ -96,8 +96,8 @@ public partial class SetupWizardViewModel : ObservableObject
     /// <summary>True when Dropbox is the selected backend.</summary>
     public bool IsDropboxBackend => SelectedBackendId == "dropbox";
 
-    /// <summary>True when OneDrive is the selected backend.</summary>
-    public bool IsOneDriveBackend => SelectedBackendId == "onedrive";
+    /// <summary>True when pCloud is the selected backend.</summary>
+    public bool IsPCloudBackend => SelectedBackendId == "pcloud";
 
     /// <summary>True when the user may advance past the storage selection step.</summary>
     public bool CanAdvanceFromStorageStep =>

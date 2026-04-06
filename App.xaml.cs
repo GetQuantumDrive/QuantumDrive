@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml;
 using quantum_drive.Services;
 using quantum_drive.Services.Dropbox;
 using quantum_drive.Services.GoogleDrive;
-using quantum_drive.Services.OneDrive;
+using quantum_drive.Services.PCloud;
 using quantum_drive.ViewModels;
 using quantum_drive.Views;
 
@@ -57,7 +57,7 @@ public partial class App : Application
         backendRegistry.Register(new LocalStorageBackendFactory());
         backendRegistry.Register(new GoogleDriveStorageBackendFactory());
         backendRegistry.Register(new DropboxStorageBackendFactory());
-        backendRegistry.Register(new OneDriveStorageBackendFactory());
+        backendRegistry.Register(new PCloudStorageBackendFactory());
 
         _window = new MainWindow();
         CurrentWindow = _window;
