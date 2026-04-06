@@ -8,9 +8,11 @@ namespace quantum_drive.Services.PCloud;
 /// Factory for the pCloud storage backend.
 ///
 /// <para>
-/// Implements <see cref="ICloudStorageBackendFactory"/> to provide the OAuth 2.0 PKCE
-/// authorization flow via the pCloud identity platform.  After
-/// <see cref="AuthorizeAsync"/> completes, the returned config dictionary contains:
+/// Implements <see cref="ICloudStorageBackendFactory"/> using the pCloud OAuth 2.0
+/// <b>token (implicit) flow</b> (<c>response_type=token</c>).  The bearer token is
+/// returned directly in the loopback redirect query string — no second API call is
+/// required and no client secret is needed.  After <see cref="AuthorizeAsync"/>
+/// completes, the returned config dictionary contains:
 /// </para>
 /// <list type="table">
 /// <listheader><term>Key</term><description>Value</description></listheader>
@@ -24,8 +26,8 @@ namespace quantum_drive.Services.PCloud;
 /// <b>Developer set-up:</b> register an application at
 /// <see href="https://docs.pcloud.com/oauth_2.0_authentication.html"/>.
 /// Provide your app name and the redirect URI <c>http://localhost</c>.  Replace
-/// <see cref="ClientId"/> with the issued client ID.  No client secret is required
-/// for PKCE.  pCloud access tokens are long-lived and do not need periodic refresh.
+/// <see cref="ClientId"/> with the issued client ID.  No client secret is required.
+/// pCloud access tokens are long-lived and do not need periodic refresh.
 /// </para>
 /// </summary>
 public sealed class PCloudStorageBackendFactory : ICloudStorageBackendFactory
@@ -35,8 +37,7 @@ public sealed class PCloudStorageBackendFactory : ICloudStorageBackendFactory
     /// <summary>Client ID from the pCloud developer portal app registration.</summary>
     internal const string ClientId = "YOUR_PCLOUD_CLIENT_ID";
 
-    private const string AuthEndpoint  = "https://my.pcloud.com/oauth2/authorize";
-    private const string TokenEndpoint = "https://api.pcloud.com/oauth2_token";
+    private const string AuthEndpoint    = "https://my.pcloud.com/oauth2/authorize";
     internal const string DefaultApiBase = "https://api.pcloud.com";
 
     // ── IStorageBackendFactory ─────────────────────────────────────────────────
@@ -59,25 +60,26 @@ public sealed class PCloudStorageBackendFactory : ICloudStorageBackendFactory
     {
         var port        = OAuthLoopbackHelper.GetFreePort();
         var redirectUri = OAuthLoopbackHelper.BuildRedirectUri(port);
-        var (verifier, challenge) = OAuthLoopbackHelper.GeneratePkce();
 
-        var authUrl = BuildAuthUrl(redirectUri, challenge);
+        // Token flow: pCloud returns the bearer token directly in the redirect
+        // query string — no code exchange step needed.
+        var authUrl = BuildAuthUrl(redirectUri);
         Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
 
-        var code = await OAuthLoopbackHelper.WaitForAuthCodeAsync(redirectUri, ct);
+        var redirectParams = await OAuthLoopbackHelper.WaitForTokenRedirectAsync(redirectUri, ct);
 
-        var tokenJson = await OAuthLoopbackHelper.ExchangeCodeForTokensAsync(
-            TokenEndpoint,
-            new Dictionary<string, string>
-            {
-                ["code"]          = code,
-                ["client_id"]     = ClientId,
-                ["redirect_uri"]  = redirectUri,
-                ["grant_type"]    = "authorization_code",
-                ["code_verifier"] = verifier,
-            }, ct);
+        var config = new Dictionary<string, string>
+        {
+            ["access_token"] = redirectParams["access_token"],
+            // pCloud tokens are long-lived; set a far-future sentinel so the
+            // base-class refresh logic stays dormant.
+            ["token_expiry"] = DateTime.UtcNow.AddYears(10).ToString("O"),
+        };
 
-        var config = ParseTokenResponse(tokenJson);
+        // "api.pcloud.com" = global/US bucket; "eapi.pcloud.com" = EU bucket.
+        if (redirectParams.TryGetValue("hostname", out var hostname) &&
+            !string.IsNullOrEmpty(hostname))
+            config["api_host"] = hostname;
 
         // Fetch the user's email from the pCloud userinfo endpoint.
         var apiBase  = config.TryGetValue("api_host", out var h) ? $"https://{h}" : DefaultApiBase;
@@ -97,38 +99,16 @@ public sealed class PCloudStorageBackendFactory : ICloudStorageBackendFactory
 
     // ── Private helpers ────────────────────────────────────────────────────────
 
-    private static string BuildAuthUrl(string redirectUri, string codeChallenge)
+    private static string BuildAuthUrl(string redirectUri)
     {
         var qs = new Dictionary<string, string>
         {
-            ["client_id"]             = ClientId,
-            ["redirect_uri"]          = redirectUri,
-            ["response_type"]         = "code",
-            ["code_challenge"]        = codeChallenge,
-            ["code_challenge_method"] = "S256",
+            ["client_id"]     = ClientId,
+            ["redirect_uri"]  = redirectUri,
+            ["response_type"] = "token",
         };
         return AuthEndpoint + "?" +
                string.Join("&", qs.Select(kv =>
                    $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
-    }
-
-    private static Dictionary<string, string> ParseTokenResponse(string json)
-    {
-        var config = new Dictionary<string, string>();
-        var root   = OAuthLoopbackHelper.ParseJsonPublic(json);
-
-        if (root.TryGetProperty("access_token", out var at))
-            config["access_token"] = at.GetString()!;
-
-        // pCloud tokens are long-lived; set a far-future sentinel so the base-class
-        // refresh logic (which triggers when token_expiry is missing or near) stays dormant.
-        config["token_expiry"] = DateTime.UtcNow.AddYears(10).ToString("O");
-
-        // pCloud returns the hostname that should be used for all subsequent API calls.
-        // "api.pcloud.com" = global/US bucket; "eapi.pcloud.com" = EU bucket.
-        if (root.TryGetProperty("hostname", out var hn) && hn.GetString() is { Length: > 0 } hostVal)
-            config["api_host"] = hostVal;
-
-        return config;
     }
 }
