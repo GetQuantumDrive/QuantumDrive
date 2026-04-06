@@ -83,7 +83,7 @@ crash.dmp
 **/Properties/PublishProfiles/
 
 # Claude Code local settings
-.claude/settings.local.json
+.claude/
 
 # Vault data files — encrypted drive content should never be committed
 *.qd
