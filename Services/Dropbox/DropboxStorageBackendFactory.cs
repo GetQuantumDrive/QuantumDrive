@@ -33,7 +33,7 @@ public sealed class DropboxStorageBackendFactory : ICloudStorageBackendFactory
     // ── OAuth credentials — replace with real values from dropbox.com/developers ──
 
     /// <summary>App key from the Dropbox App Console.</summary>
-    internal const string ClientId = "YOUR_DROPBOX_APP_KEY";
+    internal const string ClientId = "3870e9q9zgmvhdb";
 
     private const string AuthEndpoint  = "https://www.dropbox.com/oauth2/authorize";
     private const string TokenEndpoint = "https://api.dropboxapi.com/oauth2/token";
