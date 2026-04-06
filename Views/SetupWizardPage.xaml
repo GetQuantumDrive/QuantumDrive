@@ -313,8 +313,13 @@
                             <Button Content="Connect Account"
                                     Command="{x:Bind ViewModel.ConnectCloudAccountCommand}"
                                     IsEnabled="{x:Bind ViewModel.IsAuthorizingCloud, Mode=OneWay, Converter={StaticResource InvertBoolConverter}}"/>
-                            <ProgressRing IsActive="{x:Bind ViewModel.IsAuthorizingCloud, Mode=OneWay}"
-                                          Width="24" Height="24" HorizontalAlignment="Left"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8"
+                                        Visibility="{x:Bind ViewModel.IsAuthorizingCloud, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ProgressRing IsActive="True" Width="24" Height="24" VerticalAlignment="Center"/>
+                                <Button Content="Cancel"
+                                        Command="{x:Bind ViewModel.CancelCloudAuthCommand}"
+                                        VerticalAlignment="Center"/>
+                            </StackPanel>
                             <!-- Connected confirmation -->
                             <StackPanel Orientation="Horizontal" Spacing="6"
                                         Visibility="{x:Bind ViewModel.ConnectedAccountLabel, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}">
