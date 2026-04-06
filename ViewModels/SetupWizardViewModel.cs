@@ -22,6 +22,10 @@ public partial class SetupWizardViewModel : ObservableObject
     /// creation. Passed to <see cref="IVaultRegistry.RegisterNewVaultAsync"/>.</summary>
     private Dictionary<string, string>? _pendingBackendConfig;
 
+    /// <summary>CTS for the in-flight <see cref="ConnectCloudAccountAsync"/> OAuth flow;
+    /// cancelled by <see cref="CancelCloudAuthCommand"/>.</summary>
+    private CancellationTokenSource? _authCts;
+
     [ObservableProperty]
     private int _currentStep;
 
@@ -248,12 +252,13 @@ public partial class SetupWizardViewModel : ObservableObject
         CloudAuthError        = string.Empty;
         ConnectedAccountLabel = string.Empty;
 
+        _authCts = new CancellationTokenSource();
         try
         {
             var window = App.CurrentWindow
                 ?? throw new InvalidOperationException("No active window.");
 
-            _pendingBackendConfig = await factory.AuthorizeAsync(window);
+            _pendingBackendConfig = await factory.AuthorizeAsync(window, _authCts.Token);
             ConnectedAccountLabel = factory.GetConnectedAccount(_pendingBackendConfig)
                                     ?? "(connected)";
         }
@@ -268,9 +273,14 @@ public partial class SetupWizardViewModel : ObservableObject
         }
         finally
         {
+            _authCts.Dispose();
+            _authCts = null;
             IsAuthorizingCloud = false;
         }
     }
+
+    [RelayCommand]
+    private void CancelCloudAuth() => _authCts?.Cancel();
 
     public void SetVaultFolder(StorageFolder folder)
     {
