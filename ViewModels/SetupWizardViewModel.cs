@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using quantum_drive.Helpers;
 using quantum_drive.Models;
 using quantum_drive.Services;
+using quantum_drive.Services.S3;
 using quantum_drive.Views;
 
 namespace quantum_drive.ViewModels;
@@ -16,8 +17,9 @@ public partial class SetupWizardViewModel : ObservableObject
     private readonly INavigationService _navigationService;
     private readonly StorageBackendRegistry _backendRegistry;
 
-    /// <summary>BackendConfig populated by <see cref="ConnectCloudAccountAsync"/>; passed to
-    /// <see cref="IVaultRegistry.RegisterNewVaultAsync"/> when the vault is created.</summary>
+    /// <summary>BackendConfig populated by <see cref="ConnectCloudAccountAsync"/> (OAuth
+    /// providers) or assembled from S3 credential fields (S3 providers) just before vault
+    /// creation. Passed to <see cref="IVaultRegistry.RegisterNewVaultAsync"/>.</summary>
     private Dictionary<string, string>? _pendingBackendConfig;
 
     [ObservableProperty]
@@ -71,10 +73,12 @@ public partial class SetupWizardViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsGoogleDriveBackend))]
     [NotifyPropertyChangedFor(nameof(IsDropboxBackend))]
     [NotifyPropertyChangedFor(nameof(IsPCloudBackend))]
+    [NotifyPropertyChangedFor(nameof(IsS3Backend))]
+    [NotifyPropertyChangedFor(nameof(IsOAuthBackend))]
     [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
     private string _selectedBackendId = "local";
 
-    /// <summary>Display label shown below the cloud provider Connect button (e.g. "user@gmail.com").</summary>
+    /// <summary>Display label shown after OAuth succeeds (e.g. "user@gmail.com").</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
     private string _connectedAccountLabel = string.Empty;
@@ -87,7 +91,32 @@ public partial class SetupWizardViewModel : ObservableObject
     [ObservableProperty]
     private string _cloudAuthError = string.Empty;
 
-    /// <summary>True when the local storage option is selected (vault folder picker is visible).</summary>
+    // ── S3 credential fields ───────────────────────────────────────────────────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
+    private string _s3AccessKey = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
+    private string _s3SecretKey = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
+    private string _s3Bucket = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAdvanceFromStorageStep))]
+    private string _s3Region = string.Empty;
+
+    /// <summary>Region options for the currently selected S3 provider. Bound to the
+    /// ComboBox in the credential form.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<S3RegionItem> _s3AvailableRegions = [];
+
+    // ── Computed properties ────────────────────────────────────────────────────
+
+    /// <summary>True when the local storage option is selected.</summary>
     public bool IsLocalBackend => SelectedBackendId == "local";
 
     /// <summary>True when Google Drive is the selected backend.</summary>
@@ -99,55 +128,59 @@ public partial class SetupWizardViewModel : ObservableObject
     /// <summary>True when pCloud is the selected backend.</summary>
     public bool IsPCloudBackend => SelectedBackendId == "pcloud";
 
+    /// <summary>True when an S3-compatible backend is selected. Controls visibility of
+    /// the credential-input form.</summary>
+    public bool IsS3Backend =>
+        _backendRegistry.GetFactory(SelectedBackendId) is S3StorageBackendFactoryBase;
+
+    /// <summary>True when the selected backend uses OAuth (Google Drive, Dropbox, pCloud).
+    /// Controls visibility of the "Connect Account" section.</summary>
+    public bool IsOAuthBackend => !IsLocalBackend && !IsS3Backend;
+
     /// <summary>True when the user may advance past the storage selection step.</summary>
     public bool CanAdvanceFromStorageStep =>
-        IsLocalBackend || !string.IsNullOrEmpty(ConnectedAccountLabel);
+        IsLocalBackend
+        || (IsOAuthBackend  && !string.IsNullOrEmpty(ConnectedAccountLabel))
+        || (IsS3Backend     && IsS3ConfigValid());
 
-    public bool CanGetStarted => HasAcceptedTerms;
+    public bool CanGetStarted   => HasAcceptedTerms;
+    public bool IsPasswordValid => !string.IsNullOrEmpty(Password) && !string.IsNullOrEmpty(VaultName);
+    public bool CanFinish       => HasAcknowledgedRisk;
+    public int  TotalSteps      => 4;
 
-    public bool IsPasswordValid =>
-        !string.IsNullOrEmpty(Password)
-        && !string.IsNullOrEmpty(VaultName);
-
-    public bool CanFinish => HasAcknowledgedRisk;
-
-    public int TotalSteps => 4;
+    private bool IsS3ConfigValid() =>
+        !string.IsNullOrEmpty(S3AccessKey) &&
+        !string.IsNullOrEmpty(S3SecretKey) &&
+        !string.IsNullOrEmpty(S3Bucket)    &&
+        !string.IsNullOrEmpty(S3Region);
 
     public SetupWizardViewModel(
         IVaultRegistry vaultRegistry,
         INavigationService navigationService,
         StorageBackendRegistry backendRegistry)
     {
-        _vaultRegistry = vaultRegistry;
+        _vaultRegistry     = vaultRegistry;
         _navigationService = navigationService;
-        _backendRegistry = backendRegistry;
+        _backendRegistry   = backendRegistry;
 
-        // Default folder path
         _vaultFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
+    // ── Property-changed side-effects ──────────────────────────────────────────
+
     partial void OnPasswordChanged(string value)
     {
-        EntropyBits = EntropyCalculator.CalculateBits(value);
+        EntropyBits   = EntropyCalculator.CalculateBits(value);
         StrengthLabel = EntropyCalculator.GetStrengthLabel(EntropyBits);
-        TimeToCrack = EntropyCalculator.GetTimeToCrack(EntropyBits);
+        TimeToCrack   = EntropyCalculator.GetTimeToCrack(EntropyBits);
         OnPropertyChanged(nameof(IsPasswordValid));
     }
 
-    partial void OnVaultNameChanged(string value)
-    {
-        OnPropertyChanged(nameof(IsPasswordValid));
-    }
+    partial void OnVaultNameChanged(string value)    => OnPropertyChanged(nameof(IsPasswordValid));
+    partial void OnHasAcceptedTermsChanged(bool value)  => OnPropertyChanged(nameof(CanGetStarted));
+    partial void OnHasAcknowledgedRiskChanged(bool value) => OnPropertyChanged(nameof(CanFinish));
 
-    partial void OnHasAcceptedTermsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(CanGetStarted));
-    }
-
-    partial void OnHasAcknowledgedRiskChanged(bool value)
-    {
-        OnPropertyChanged(nameof(CanFinish));
-    }
+    // ── Commands ───────────────────────────────────────────────────────────────
 
     [RelayCommand]
     private void NextStep()
@@ -164,28 +197,45 @@ public partial class SetupWizardViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Selects a storage backend without triggering OAuth.
-    /// For cloud providers, <see cref="ConnectCloudAccountAsync"/> must be called separately.
+    /// Selects a storage backend. For OAuth providers the user must still call
+    /// <see cref="ConnectCloudAccountAsync"/>; for S3 providers the credential fields
+    /// are shown immediately.
     /// </summary>
     [RelayCommand]
     private void SelectBackend(string backendId)
     {
         if (SelectedBackendId == backendId) return;
-        SelectedBackendId = backendId;
+        SelectedBackendId     = backendId;
         ConnectedAccountLabel = string.Empty;
-        CloudAuthError = string.Empty;
+        CloudAuthError        = string.Empty;
         _pendingBackendConfig = null;
+
+        // Reset S3 fields whenever switching backends.
+        S3AccessKey = string.Empty;
+        S3SecretKey = string.Empty;
+        S3Bucket    = string.Empty;
+
+        // Load region list when an S3 factory is selected.
+        if (_backendRegistry.GetFactory(backendId) is S3StorageBackendFactoryBase s3Factory)
+        {
+            S3AvailableRegions = s3Factory.AvailableRegions;
+            S3Region = S3AvailableRegions.Count > 0 ? S3AvailableRegions[0].RegionId : string.Empty;
+        }
+        else
+        {
+            S3AvailableRegions = [];
+            S3Region           = string.Empty;
+        }
     }
 
     /// <summary>
-    /// Launches the OAuth authorization flow for the currently selected cloud backend,
-    /// stores the resulting config in <see cref="_pendingBackendConfig"/>, and updates
-    /// <see cref="ConnectedAccountLabel"/> with the signed-in account email.
+    /// Launches the OAuth authorization flow for the currently selected cloud backend.
+    /// Not called for S3 backends (guarded at the top of the method).
     /// </summary>
     [RelayCommand]
     private async Task ConnectCloudAccountAsync()
     {
-        if (IsLocalBackend) return;
+        if (IsLocalBackend || IsS3Backend) return;
 
         var factory = _backendRegistry.GetFactory(SelectedBackendId) as ICloudStorageBackendFactory;
         if (factory is null)
@@ -194,8 +244,8 @@ public partial class SetupWizardViewModel : ObservableObject
             return;
         }
 
-        IsAuthorizingCloud = true;
-        CloudAuthError = string.Empty;
+        IsAuthorizingCloud    = true;
+        CloudAuthError        = string.Empty;
         ConnectedAccountLabel = string.Empty;
 
         try
@@ -233,11 +283,23 @@ public partial class SetupWizardViewModel : ObservableObject
         if (IsCreatingVault || !IsPasswordValid) return;
 
         IsCreatingVault = true;
-        ErrorMessage = string.Empty;
+        ErrorMessage    = string.Empty;
 
         try
         {
-            // Cloud backends store their data remotely; use a local temp directory for CFAPI.
+            // For S3 backends, assemble BackendConfig from the credential fields.
+            if (IsS3Backend)
+            {
+                var s3Factory = _backendRegistry.GetFactory(SelectedBackendId) as S3StorageBackendFactoryBase;
+                if (s3Factory is null)
+                {
+                    ErrorMessage = "S3 provider is not registered.";
+                    return;
+                }
+                _pendingBackendConfig = s3Factory.BuildConfig(S3AccessKey, S3SecretKey, S3Bucket, S3Region);
+            }
+
+            // Cloud backends store data remotely; give them a local temp directory for CFAPI.
             var folderPath = IsLocalBackend
                 ? VaultFolderPath
                 : Path.Combine(
@@ -256,7 +318,6 @@ public partial class SetupWizardViewModel : ObservableObject
 
             RecoveryKey = recoveryKeyStr ?? string.Empty;
 
-            // Generate fingerprint from public key
             string fingerprint = "N/A";
             if (publicKey is not null)
             {
@@ -297,10 +358,7 @@ public partial class SetupWizardViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void CancelSetup()
-    {
-        _navigationService.NavigateTo<DashboardPage>();
-    }
+    private void CancelSetup() => _navigationService.NavigateTo<DashboardPage>();
 
     [RelayCommand]
     private void FinishSetup()
