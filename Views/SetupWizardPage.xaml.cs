@@ -33,6 +33,11 @@ public sealed partial class SetupWizardPage : Page
         UpdateEntropyBarColor();
     }
 
+    private void S3SecretKeyBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        ViewModel.S3SecretKey = S3SecretKeyBox.Password;
+    }
+
     private void UpdateEntropyBarColor()
     {
         var bits = ViewModel.EntropyBits;

@@ -161,6 +161,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <!-- Local Folder -->
@@ -235,12 +236,54 @@
                             </Border>
                         </Button>
 
-                        <!-- OneDrive -->
+                        <!-- Scaleway -->
+                        <Button Grid.Row="2" Grid.Column="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                Padding="0" Background="Transparent" BorderThickness="0"
+                                Command="{x:Bind ViewModel.SelectBackendCommand}"
+                                CommandParameter="scaleway-s3">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="8" Padding="16">
+                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                    <Grid>
+                                        <FontIcon Glyph="&#xE968;" FontSize="28" HorizontalAlignment="Center"/>
+                                        <FontIcon Glyph="&#xE73E;" FontSize="14"
+                                                  Foreground="{StaticResource QuantumVioletBrush}"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                  Visibility="{x:Bind ViewModel.IsS3Backend, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                    </Grid>
+                                    <TextBlock Text="Scaleway" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Object Storage (S3)" FontSize="11" Opacity="0.7"
+                                               TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </Button>
+
+                        <!-- OneDrive — coming soon -->
+                        <Button Grid.Row="2" Grid.Column="1"
+                                IsEnabled="False"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                Padding="0" Background="Transparent" BorderThickness="0">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="8" Padding="16"
+                                    Opacity="0.45">
+                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                    <FontIcon Glyph="&#xE753;" FontSize="28" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="OneDrive" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Coming soon" FontSize="11" Opacity="0.7"
+                                               HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </Button>
+
+                        <!-- pCloud -->
                         <Button Grid.Row="1" Grid.Column="1"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                 Padding="0" Background="Transparent" BorderThickness="0"
                                 Command="{x:Bind ViewModel.SelectBackendCommand}"
-                                CommandParameter="onedrive">
+                                CommandParameter="pcloud">
                             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1" CornerRadius="8" Padding="16">
@@ -250,21 +293,21 @@
                                         <FontIcon Glyph="&#xE73E;" FontSize="14"
                                                   Foreground="{StaticResource QuantumVioletBrush}"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                  Visibility="{x:Bind ViewModel.IsOneDriveBackend, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                  Visibility="{x:Bind ViewModel.IsPCloudBackend, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                     </Grid>
-                                    <TextBlock Text="OneDrive" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Sync to OneDrive" FontSize="11" Opacity="0.7"
+                                    <TextBlock Text="pCloud" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Sync to pCloud" FontSize="11" Opacity="0.7"
                                                TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                         </Button>
                     </Grid>
 
-                    <!-- Cloud OAuth section — shown when a cloud provider is selected -->
+                    <!-- OAuth connect section — Google Drive, Dropbox, pCloud -->
                     <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             BorderThickness="1" CornerRadius="8" Padding="16"
-                            Visibility="{x:Bind ViewModel.IsLocalBackend, Mode=OneWay, Converter={StaticResource InvertBoolToVisibilityConverter}}">
+                            Visibility="{x:Bind ViewModel.IsOAuthBackend, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <StackPanel Spacing="12">
                             <TextBlock Text="Sign in to your account" FontWeight="SemiBold"/>
                             <Button Content="Connect Account"
@@ -284,6 +327,35 @@
                             <TextBlock Text="{x:Bind ViewModel.CloudAuthError, Mode=OneWay}"
                                        Foreground="Red" FontSize="12"
                                        Visibility="{x:Bind ViewModel.CloudAuthError, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- S3 credential section — Scaleway and future S3 providers -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="16"
+                            Visibility="{x:Bind ViewModel.IsS3Backend, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="Enter your storage credentials" FontWeight="SemiBold"/>
+                            <TextBox Header="Access Key"
+                                     PlaceholderText="e.g., SCWXXXXXXXXXXXXXXXXX"
+                                     Text="{x:Bind ViewModel.S3AccessKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            <!-- PasswordBox.Password doesn't support x:Bind TwoWay; wired in code-behind -->
+                            <PasswordBox x:Name="S3SecretKeyBox"
+                                         Header="Secret Key"
+                                         PlaceholderText="Your S3 secret key"
+                                         PasswordChanged="S3SecretKeyBox_PasswordChanged"/>
+                            <TextBox Header="Bucket Name"
+                                     PlaceholderText="e.g., my-quantum-vault"
+                                     Text="{x:Bind ViewModel.S3Bucket, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            <ComboBox Header="Region"
+                                      HorizontalAlignment="Stretch"
+                                      ItemsSource="{x:Bind ViewModel.S3AvailableRegions, Mode=OneWay}"
+                                      DisplayMemberPath="RegionName"
+                                      SelectedValuePath="RegionId"
+                                      SelectedValue="{x:Bind ViewModel.S3Region, Mode=TwoWay}"/>
+                            <TextBlock Text="Credentials are stored locally and never sent to us."
+                                       FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
 
