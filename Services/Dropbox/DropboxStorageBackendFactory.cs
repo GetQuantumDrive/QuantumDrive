@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using quantum_drive.Models;
+using quantum_drive.Views.Dialogs;
 
 namespace quantum_drive.Services.Dropbox;
 
@@ -60,10 +60,11 @@ public sealed class DropboxStorageBackendFactory : ICloudStorageBackendFactory
         var redirectUri = OAuthLoopbackHelper.BuildRedirectUri(port);
         var (verifier, challenge) = OAuthLoopbackHelper.GeneratePkce();
 
-        var authUrl = BuildAuthUrl(redirectUri, challenge);
-        Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
+        var authUrl  = BuildAuthUrl(redirectUri, challenge);
+        var xamlRoot = parentWindow.Content?.XamlRoot
+            ?? throw new InvalidOperationException("Window content is not available.");
 
-        var code = await OAuthLoopbackHelper.WaitForAuthCodeAsync(redirectUri, ct);
+        var code = await OAuthWebViewDialog.GetAuthCodeAsync(authUrl, redirectUri, xamlRoot, ct);
 
         var tokenJson = await OAuthLoopbackHelper.ExchangeCodeForTokensAsync(
             TokenEndpoint,

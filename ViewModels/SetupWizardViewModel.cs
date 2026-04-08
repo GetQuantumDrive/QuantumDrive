@@ -344,10 +344,6 @@ public partial class SetupWizardViewModel : ObservableObject
 
             CurrentStep = 3;
         }
-        catch (VaultLimitReachedException)
-        {
-            ErrorMessage = "Free tier allows 1 vault. Upgrade to Pro for unlimited vaults.";
-        }
         catch (Exception ex)
         {
             Debug.WriteLine($"Vault creation failed: {ex.Message}");

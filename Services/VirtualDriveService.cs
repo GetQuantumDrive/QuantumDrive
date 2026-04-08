@@ -276,6 +276,29 @@ public class VirtualDriveService : IVirtualDriveService
                     }
                 }
 
+                // Unregister sync roots for vaults deleted while locked.
+                // Locked vaults never enter _providers, so the staleIds loop above misses them.
+                try
+                {
+                    var registered = Windows.Storage.Provider.StorageProviderSyncRootManager
+                        .GetCurrentSyncRoots();
+                    foreach (var root in registered)
+                    {
+                        if (!root.Id.StartsWith("QuantumDrive!", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        var rootVaultId = root.Id["QuantumDrive!".Length..];
+                        if (!allVaultIds.Contains(rootVaultId))
+                        {
+                            SyncRootRegistrar.Unregister(rootVaultId);
+                            RemoveSyncRootFolder(rootVaultId);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Stale sync root cleanup failed: {ex.Message}");
+                }
+
                 // Connect providers for newly unlocked vaults
                 ConnectAllVaults(iconPath);
             });
