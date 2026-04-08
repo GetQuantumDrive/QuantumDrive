@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using quantum_drive.Models;
+using quantum_drive.Views.Dialogs;
 
 namespace quantum_drive.Services.PCloud;
 
@@ -63,10 +63,11 @@ public sealed class PCloudStorageBackendFactory : ICloudStorageBackendFactory
 
         // Token flow: pCloud returns the bearer token directly in the redirect
         // query string — no code exchange step needed.
-        var authUrl = BuildAuthUrl(redirectUri);
-        Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
+        var authUrl  = BuildAuthUrl(redirectUri);
+        var xamlRoot = parentWindow.Content?.XamlRoot
+            ?? throw new InvalidOperationException("Window content is not available.");
 
-        var redirectParams = await OAuthLoopbackHelper.WaitForTokenRedirectAsync(redirectUri, ct);
+        var redirectParams = await OAuthWebViewDialog.GetTokenParamsAsync(authUrl, redirectUri, xamlRoot, ct);
 
         var config = new Dictionary<string, string>
         {

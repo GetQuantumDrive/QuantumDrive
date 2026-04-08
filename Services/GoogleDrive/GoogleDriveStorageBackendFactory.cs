@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using quantum_drive.Models;
+using quantum_drive.Views.Dialogs;
 
 namespace quantum_drive.Services.GoogleDrive;
 
@@ -66,12 +66,11 @@ public sealed class GoogleDriveStorageBackendFactory : ICloudStorageBackendFacto
         var redirectUri = OAuthLoopbackHelper.BuildRedirectUri(port);
         var (verifier, challenge) = OAuthLoopbackHelper.GeneratePkce();
 
-        // Build authorization URL and open the browser
-        var authUrl = BuildAuthUrl(redirectUri, challenge);
-        Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
+        var authUrl  = BuildAuthUrl(redirectUri, challenge);
+        var xamlRoot = parentWindow.Content?.XamlRoot
+            ?? throw new InvalidOperationException("Window content is not available.");
 
-        // Wait for the redirect code on the loopback port
-        var code = await OAuthLoopbackHelper.WaitForAuthCodeAsync(redirectUri, ct);
+        var code = await OAuthWebViewDialog.GetAuthCodeAsync(authUrl, redirectUri, xamlRoot, ct);
 
         // Exchange code for tokens
         var tokenJson = await OAuthLoopbackHelper.ExchangeCodeForTokensAsync(

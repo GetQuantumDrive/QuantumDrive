@@ -6,10 +6,7 @@ namespace quantum_drive.Services;
 
 public class VaultRegistry : IVaultRegistry
 {
-    private const int FreeVaultLimit = 1;
-
     private readonly IPostQuantumCrypto _pqCrypto;
-    private readonly ILicenseService _licenseService;
     private readonly WindowsHelloService _windowsHello;
     private readonly List<VaultDescriptor> _vaults = new();
     private readonly Dictionary<string, VaultContext> _contexts = new();
@@ -21,16 +18,13 @@ public class VaultRegistry : IVaultRegistry
 
     public bool HasAnyVault => _vaults.Count > 0;
 
-    public bool IsAtVaultLimit =>
-        !_licenseService.IsProLicenseActive && _vaults.Count >= FreeVaultLimit;
+    public bool IsAtVaultLimit => false;
 
     public VaultRegistry(
         IPostQuantumCrypto pqCrypto,
-        ILicenseService licenseService,
         WindowsHelloService windowsHello)
     {
         _pqCrypto = pqCrypto;
-        _licenseService = licenseService;
         _windowsHello = windowsHello;
         LoadVaultList();
     }
@@ -43,9 +37,6 @@ public class VaultRegistry : IVaultRegistry
         string backendId = "local",
         Dictionary<string, string>? backendConfig = null)
     {
-        if (!_licenseService.IsProLicenseActive && _vaults.Count >= FreeVaultLimit)
-            throw new VaultLimitReachedException(FreeVaultLimit);
-
         var vaultDir = Path.Combine(folderPath, ".quantum_vault");
         Directory.CreateDirectory(vaultDir);
 
@@ -79,9 +70,6 @@ public class VaultRegistry : IVaultRegistry
 
     public async Task<VaultDescriptor> RegisterExistingVaultAsync(string name, string folderPath, string password)
     {
-        if (!_licenseService.IsProLicenseActive && _vaults.Count >= FreeVaultLimit)
-            throw new VaultLimitReachedException(FreeVaultLimit);
-
         var vaultDir = Path.Combine(folderPath, ".quantum_vault");
         if (!File.Exists(Path.Combine(vaultDir, "vault.identity")))
             throw new FileNotFoundException("No vault.identity found in the selected folder.");
