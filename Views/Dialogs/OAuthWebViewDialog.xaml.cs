@@ -4,10 +4,10 @@ using Microsoft.Web.WebView2.Core;
 
 namespace quantum_drive.Views.Dialogs;
 
-internal enum OAuthFlowKind { Code, Token }
-
 public sealed partial class OAuthWebViewDialog : ContentDialog
 {
+    private enum OAuthFlowKind { Code, Token }
+
     private readonly string _authUrl;
     private readonly string _redirectUriPrefix;
     private readonly OAuthFlowKind _flowKind;
@@ -23,8 +23,8 @@ public sealed partial class OAuthWebViewDialog : ContentDialog
         _redirectUriPrefix = redirectUriPrefix;
         _flowKind          = flowKind;
 
-        AuthWebView.Loaded             += (_, _) => AuthWebView.Source = new Uri(_authUrl);
-        AuthWebView.NavigationStarting += OnNavigationStarting;
+        AuthWebView.Loaded              += OnWebViewLoaded;
+        AuthWebView.NavigationStarting  += OnNavigationStarting;
         AuthWebView.NavigationCompleted += OnNavigationCompleted;
         Closed += OnClosed;
     }
@@ -35,10 +35,10 @@ public sealed partial class OAuthWebViewDialog : ContentDialog
         string authUrl, string redirectUriPrefix, XamlRoot xamlRoot, CancellationToken ct)
     {
         var dialog = new OAuthWebViewDialog(authUrl, redirectUriPrefix, OAuthFlowKind.Code);
-        dialog.XamlRoot = xamlRoot;
+        dialog.XamlRoot  = xamlRoot;
         dialog._codeTcs  = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        dialog._ctReg    = ct.Register(() => dialog.Hide());
         _ = dialog.ShowAsync();
+        dialog._ctReg    = ct.Register(() => dialog.Hide());
         return await dialog._codeTcs.Task;
     }
 
@@ -48,12 +48,15 @@ public sealed partial class OAuthWebViewDialog : ContentDialog
         var dialog = new OAuthWebViewDialog(authUrl, redirectUriPrefix, OAuthFlowKind.Token);
         dialog.XamlRoot  = xamlRoot;
         dialog._tokenTcs = new TaskCompletionSource<Dictionary<string, string>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        dialog._ctReg    = ct.Register(() => dialog.Hide());
         _ = dialog.ShowAsync();
+        dialog._ctReg    = ct.Register(() => dialog.Hide());
         return await dialog._tokenTcs.Task;
     }
 
     // ── Event handlers ─────────────────────────────────────────────────────────
+
+    private void OnWebViewLoaded(object sender, RoutedEventArgs e)
+        => AuthWebView.Source = new Uri(_authUrl);
 
     private void OnNavigationStarting(WebView2 sender, CoreWebView2NavigationStartingEventArgs e)
     {
@@ -108,6 +111,10 @@ public sealed partial class OAuthWebViewDialog : ContentDialog
     {
         _codeTcs?.TrySetCanceled();
         _tokenTcs?.TrySetCanceled();
+        AuthWebView.Loaded              -= OnWebViewLoaded;
+        AuthWebView.NavigationStarting  -= OnNavigationStarting;
+        AuthWebView.NavigationCompleted -= OnNavigationCompleted;
+        Closed -= OnClosed;
         _ctReg.Dispose();
     }
 
@@ -120,7 +127,6 @@ public sealed partial class OAuthWebViewDialog : ContentDialog
         Hide();
     }
 
-    /// <summary>Parses a URL query string (with or without leading '?') into a dictionary.</summary>
     private static Dictionary<string, string> ParseQueryString(string query)
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

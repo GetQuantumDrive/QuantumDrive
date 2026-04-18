@@ -57,7 +57,7 @@ public partial class App : Application
         backendRegistry.Register(new LocalStorageBackendFactory());
         backendRegistry.Register(new GoogleDriveStorageBackendFactory());
         backendRegistry.Register(new DropboxStorageBackendFactory());
-backendRegistry.Register(new ScalewayStorageBackendFactory());
+        backendRegistry.Register(new ScalewayStorageBackendFactory());
 
         _window = new MainWindow();
         CurrentWindow = _window;

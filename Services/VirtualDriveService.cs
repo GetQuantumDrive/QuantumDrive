@@ -19,6 +19,8 @@ public class VirtualDriveService : IVirtualDriveService
     private readonly Dictionary<string, string> _syncRootPaths = []; // vaultId → sync root folder path
     private readonly SemaphoreSlim _providerLock = new(1, 1); // serialises all _providers/_syncRootPaths mutations
 
+    private const string SyncRootIdPrefix = "QuantumDrive!";
+
     private bool _isConnected;
 
     public string? SyncRootPath => _isConnected ? SyncRootParent : null;
@@ -64,7 +66,7 @@ public class VirtualDriveService : IVirtualDriveService
             var roots = Windows.Storage.Provider.StorageProviderSyncRootManager.GetCurrentSyncRoots();
             foreach (var root in roots)
             {
-                if (!root.Id.StartsWith("QuantumDrive!", StringComparison.OrdinalIgnoreCase))
+                if (!root.Id.StartsWith(SyncRootIdPrefix, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 try
@@ -284,9 +286,9 @@ public class VirtualDriveService : IVirtualDriveService
                         .GetCurrentSyncRoots();
                     foreach (var root in registered)
                     {
-                        if (!root.Id.StartsWith("QuantumDrive!", StringComparison.OrdinalIgnoreCase))
+                        if (!root.Id.StartsWith(SyncRootIdPrefix, StringComparison.OrdinalIgnoreCase))
                             continue;
-                        var rootVaultId = root.Id["QuantumDrive!".Length..];
+                        var rootVaultId = root.Id[SyncRootIdPrefix.Length..];
                         if (!allVaultIds.Contains(rootVaultId))
                         {
                             SyncRootRegistrar.Unregister(rootVaultId);
